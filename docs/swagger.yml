@@ -1,0 +1,994 @@
+openapi: 3.0.0
+info:
+  title: Unified Payment Orchestration Platform API
+  description: |-
+    API specifications for the distributed microservices handling multi-method banking payments.
+    Services include Gateway (entry point), Compliance (fraud/AML), Authorization (security), 
+    Settlement (transaction processing with sagas), Reconciliation (audits), and Notification (alerts).
+    Supports payment types: card, pos, transfer, interbank, wallet, upi, crypto (mocks).
+  version: 1.0.0
+  contact:
+    name: Project Team
+    email: team@example.com
+servers:
+  - url: http://localhost:8080/v1
+    description: Local development server
+  - url: https://api.payment-orchestrator.com/v1
+    description: Production server (mock)
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    PaymentRequest:
+      type: object
+      required: [paymentType, amount, currency]
+      properties:
+        paymentType:
+          type: string
+          enum: [card, pos, transfer, interbank, wallet, upi, crypto]
+          description: Type of payment method.
+          example: card
+        amount:
+          type: number
+          format: float
+          minimum: 0.01
+          description: Payment amount.
+          example: 100.50
+        currency:
+          type: string
+          default: USD
+          description: ISO 4217 currency code.
+          example: USD
+        details:
+          type: object
+          additionalProperties: true
+          description: Method-specific details (e.g., cardNumber for card).
+          example: { cardNumber: "4111111111111111", expiry: "12/28", cvv: "123" }
+        metadata:
+          type: object
+          properties:
+            userId:
+              type: string
+              description: User identifier.
+              example: user-123
+    PaymentResponse:
+      type: object
+      properties:
+        transactionId:
+          type: string
+          description: Unique transaction ID.
+          example: tx-789
+        status:
+          type: string
+          enum: [initiated, authorized, settled, failed, cancelled]
+          description: Current status.
+          example: initiated
+        details:
+          type: object
+          additionalProperties: true
+          description: Additional info (e.g., fee).
+          example: { fee: 1.50 }
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: HTTP status code.
+          example: 400
+        message:
+          type: string
+          description: Error message.
+          example: Invalid payment details
+    ComplianceRequest:
+      type: object
+      properties:
+        transactionId:
+          type: string
+        paymentType:
+          type: string
+        details:
+          type: object
+    ComplianceResponse:
+      type: object
+      properties:
+        compliant:
+          type: boolean
+          example: true
+        flags:
+          type: array
+          items:
+            type: string
+          example: ["high_velocity"]
+    AuthorizationRequest:
+      type: object
+      properties:
+        transactionId:
+          type: string
+        paymentType:
+          type: string
+        amount:
+          type: number
+        details:
+          type: object
+    AuthorizationResponse:
+      type: object
+      properties:
+        approved:
+          type: boolean
+          example: true
+        authCode:
+          type: string
+          example: auth-123
+        riskScore:
+          type: number
+          example: 0.2
+    SettlementRequest:
+      type: object
+      properties:
+        transactionId:
+          type: string
+        authCode:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+        fee:
+          type: number
+    SettlementResponse:
+      type: object
+      properties:
+        settlementId:
+          type: string
+          example: set-456
+        status:
+          type: string
+          example: settled
+    ReconciliationRequest:
+      type: object
+      properties:
+        transactionId:
+          type: string
+        ledgerAmount:
+          type: number
+    ReconciliationResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [matched, discrepant]
+          example: matched
+        discrepancy:
+          type: number
+          example: 0.00
+    NotificationRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [email, sms, push]
+          example: email
+        recipient:
+          type: string
+          example: user@example.com
+        message:
+          type: string
+          example: Payment settled
+        paymentType:
+          type: string
+    NotificationResponse:
+      type: object
+      properties:
+        notificationId:
+          type: string
+          example: not-123
+        status:
+          type: string
+          example: sent
+    TemplateRequest:
+      type: object
+      properties:
+        templateId:
+          type: string
+        content:
+          type: string
+    CurrencyConversionRequest:
+      type: object
+      properties:
+        amount:
+          type: number
+        fromCurrency:
+          type: string
+        toCurrency:
+          type: string
+    CurrencyConversionResponse:
+      type: object
+      properties:
+        convertedAmount:
+          type: number
+        exchangeRate:
+          type: number
+    FeeCalculationRequest:
+      type: object
+      properties:
+        paymentType:
+          type: string
+        amount:
+          type: number
+    FeeCalculationResponse:
+      type: object
+      properties:
+        fee:
+          type: number
+        total:
+          type: number
+    RiskScoreRequest:
+      type: object
+      properties:
+        transactionId:
+          type: string
+        details:
+          type: object
+    RiskScoreResponse:
+      type: object
+      properties:
+        riskScore:
+          type: number
+        flags:
+          type: array
+          items:
+            type: string
+    RuleUpdateRequest:
+      type: object
+      properties:
+        ruleId:
+          type: string
+        threshold:
+          type: number
+    SubscriptionRequest:
+      type: object
+      properties:
+        userId:
+          type: string
+        channels:
+          type: array
+          items:
+            type: string
+        paymentTypes:
+          type: array
+          items:
+            type: string
+    SubscriptionResponse:
+      type: object
+      properties:
+        subscriptionId:
+          type: string
+    RegisterMethodRequest:
+      type: object
+      properties:
+        userId:
+          type: string
+        paymentType:
+          type: string
+        details:
+          type: object
+    RegisterMethodResponse:
+      type: object
+      properties:
+        methodId:
+          type: string
+    RefundRequest:
+      type: object
+      properties:
+        transactionId:
+          type: string
+        amount:
+          type: number
+        reason:
+          type: string
+    RefundResponse:
+      type: object
+      properties:
+        refundId:
+          type: string
+        status:
+          type: string
+    FlagTransactionRequest:
+      type: object
+      properties:
+        transactionId:
+          type: string
+        reason:
+          type: string
+    FlagTransactionResponse:
+      type: object
+      properties:
+        flagId:
+          type: string
+    ReportDiscrepancyRequest:
+      type: object
+      properties:
+        transactionId:
+          type: string
+        discrepancy:
+          type: number
+    ReportDiscrepancyResponse:
+      type: object
+      properties:
+        resolutionId:
+          type: string
+    BatchSettleRequest:
+      type: object
+      properties:
+        batchId:
+          type: string
+        transactions:
+          type: array
+          items:
+            type: object
+            properties:
+              transactionId:
+                type: string
+              fee:
+                type: number
+    BatchSettleResponse:
+      type: object
+      properties:
+        batchId:
+          type: string
+        processed:
+          type: integer
+        failed:
+          type: integer
+    BatchReconcileRequest:
+      type: object
+      properties:
+        batchId:
+          type: string
+    BatchReconcileResponse:
+      type: object
+      properties:
+        batchId:
+          type: string
+        discrepancies:
+          type: integer
+paths:
+  # Gateway Service
+  /payments:
+    post:
+      tags:
+        - Gateway
+      summary: Initiate a payment across methods
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+      responses:
+        '201':
+          description: Payment initiated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+  /payments/{transactionId}:
+    get:
+      tags:
+        - Gateway
+      summary: Query payment status
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: transactionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Payment status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '404':
+          description: Transaction not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /payments/{transactionId}/cancel:
+    post:
+      tags:
+        - Gateway
+      summary: Cancel a pending payment
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: transactionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  example: user_cancelled
+      responses:
+        '200':
+          description: Payment cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: cancelled
+        '409':
+          description: Conflict (already settled)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /payment-methods:
+    get:
+      tags:
+        - Gateway
+      summary: List supported payment methods
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Supported methods
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  methods:
+                    type: array
+                    items:
+                      type: string
+                    example: ["card", "pos", "transfer", "interbank", "wallet", "upi", "crypto"]
+  /refunds:
+    post:
+      tags:
+        - Gateway
+      summary: Initiate a refund
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefundRequest'
+      responses:
+        '201':
+          description: Refund initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  # Compliance Service
+  /check-compliance:
+    post:
+      tags:
+        - Compliance
+      summary: Run compliance and fraud check
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComplianceRequest'
+      responses:
+        '200':
+          description: Compliance result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplianceResponse'
+        '403':
+          description: Non-compliant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /flag-transaction:
+    post:
+      tags:
+        - Compliance
+      summary: Flag a transaction for review
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FlagTransactionRequest'
+      responses:
+        '201':
+          description: Transaction flagged
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FlagTransactionResponse'
+  /compliance/{transactionId}:
+    get:
+      tags:
+        - Compliance
+      summary: Retrieve compliance report
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: transactionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Compliance report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplianceResponse'
+        '404':
+          description: Not found
+  /rules/update:
+    post:
+      tags:
+        - Compliance
+      summary: Update fraud rules
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleUpdateRequest'
+      responses:
+        '200':
+          description: Rules updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ruleId:
+                    type: string
+  # Authorization Service
+  /authorize:
+    post:
+      tags:
+        - Authorization
+      summary: Authorize a payment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthorizationRequest'
+      responses:
+        '200':
+          description: Authorization result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorizationResponse'
+        '403':
+          description: Authorization failed
+  /tokenize:
+    post:
+      tags:
+        - Authorization
+      summary: Tokenize payment details
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                paymentType:
+                  type: string
+                details:
+                  type: object
+      responses:
+        '201':
+          description: Token created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  lastFour:
+                    type: string
+  /authorizations/{transactionId}:
+    get:
+      tags:
+        - Authorization
+      summary: Retrieve authorization details
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: transactionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Authorization details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorizationResponse'
+  /register-method:
+    post:
+      tags:
+        - Authorization
+      summary: Register a new payment method
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterMethodRequest'
+      responses:
+        '201':
+          description: Method registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterMethodResponse'
+  /risk-score:
+    post:
+      tags:
+        - Authorization
+      summary: Compute risk score
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RiskScoreRequest'
+      responses:
+        '200':
+          description: Risk score
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskScoreResponse'
+  # Settlement Service
+  /settle:
+    post:
+      tags:
+        - Settlement
+      summary: Settle a single transaction
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettlementRequest'
+      responses:
+        '200':
+          description: Settlement result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementResponse'
+        '409':
+          description: Conflict
+  /batch-settle:
+    post:
+      tags:
+        - Settlement
+      summary: Settle batch transactions
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchSettleRequest'
+      responses:
+        '202':
+          description: Batch accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchSettleResponse'
+  /settlements/{settlementId}:
+    get:
+      tags:
+        - Settlement
+      summary: Query settlement status
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: settlementId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Settlement status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementResponse'
+  /convert-currency:
+    post:
+      tags:
+        - Settlement
+      summary: Convert currency
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CurrencyConversionRequest'
+      responses:
+        '200':
+          description: Converted amount
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrencyConversionResponse'
+  /calculate-fees:
+    post:
+      tags:
+        - Settlement
+      summary: Calculate fees
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeeCalculationRequest'
+      responses:
+        '200':
+          description: Fee calculation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeCalculationResponse'
+  # Reconciliation Service
+  /reconcile:
+    post:
+      tags:
+        - Reconciliation
+      summary: Reconcile a transaction
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconciliationRequest'
+      responses:
+        '200':
+          description: Reconciliation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationResponse'
+  /batch-reconcile:
+    post:
+      tags:
+        - Reconciliation
+      summary: Batch reconciliation
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchReconcileRequest'
+      responses:
+        '202':
+          description: Batch result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchReconcileResponse'
+  /reconciliations/{reconcileId}:
+    get:
+      tags:
+        - Reconciliation
+      summary: Query reconciliation result
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: reconcileId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationResponse'
+  /report-discrepancy:
+    post:
+      tags:
+        - Reconciliation
+      summary: Report a discrepancy
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportDiscrepancyRequest'
+      responses:
+        '201':
+          description: Report created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportDiscrepancyResponse'
+  # Notification Service
+  /notify:
+    post:
+      tags:
+        - Notification
+      summary: Send a notification
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationRequest'
+      responses:
+        '202':
+          description: Notification accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationResponse'
+  /notifications/{notificationId}:
+    get:
+      tags:
+        - Notification
+      summary: Check notification status
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationResponse'
+  /subscribe:
+    post:
+      tags:
+        - Notification
+      summary: Configure subscription preferences
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionRequest'
+      responses:
+        '201':
+          description: Subscription created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+  /templates:
+    post:
+      tags:
+        - Notification
+      summary: Create notification template
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TemplateRequest'
+      responses:
+        '201':
+          description: Template created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  templateId:
+                    type: string
+  /templates/{templateId}:
+    get:
+      tags:
+        - Notification
+      summary: Retrieve template
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Template details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateRequest'
+security:
+  - bearerAuth: []  # Global security
