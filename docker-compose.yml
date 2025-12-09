@@ -20,6 +20,18 @@ services:
     networks:
       - app-network
 
+  db:
+    image: postgres:16-alpine  # Lightweight PostgreSQL image
+    ports:
+      - "5432:5432"  # Expose for local tools like pgAdmin
+    environment:
+      - POSTGRES_USER=postgres_user
+      - POSTGRES_PASSWORD=postgres_pass
+      - POSTGRES_DB=app_db
+    volumes:
+      - db-data:/var/lib/postgresql/data  # Persist data across restarts
+    networks:
+      - app-network
 
 
 networks:
