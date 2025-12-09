@@ -1,4 +1,4 @@
-const axios = require('axios'); 
+const axios = require('axios');
 require('dotenv').config();
 
 class AuthClient {
@@ -6,27 +6,19 @@ class AuthClient {
         this.baseUrl = process.env.AUTH_SERVICE_URL || 'http://auth-service:3001';
     }
 
-    async authorizePayment(token, paymentDetails) {
+    async verifyToken(token) {
         try {
-            const response = await axios.post(`${this.baseUrl}/v1/authorize`, paymentDetails, {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
-            });
-            return response.data;
+            const response = await axios.post(`${this.baseUrl}/auth/validate`, { token });
+            return response.data; // { valid: true, user: ... }
         } catch (error) {
-            console.error('Auth Service Error:', error.message);
-            if (error.response) {
-                throw new Error(`Auth Failed: ${error.response.data.message || error.response.statusText}`);
-            }
-            throw new Error('Auth Service Unreachable');
+            console.error('Auth Service Verify Error:', error.message);
+            throw new Error('Auth Token Invalid or Expired');
         }
     }
 
-    // Placeholder for simple token verification if needed separately
-    async verifyToken(token) {
-        // Implementation for later
-        return true;
+    // Deprecating complex authorize in favor of simple token check for now
+    async authorizePayment(token, paymentDetails) {
+        return this.verifyToken(token);
     }
 }
 

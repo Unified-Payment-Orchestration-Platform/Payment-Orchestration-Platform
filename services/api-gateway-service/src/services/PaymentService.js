@@ -16,11 +16,11 @@ class PaymentService {
         // We assume the token is passed from the controller
         console.log(`[PaymentService] Verifying auth for ${transactionId}`);
         try {
-            // For POC/Dev, we might skip this if no real Auth Service is running yet,
-            // but the plan requires it. We will try-catch it gracefully.
-            // await this.authClient.authorizePayment(authToken, paymentRequest);
-            console.log('[PaymentService] Auth check skipped for local dev/POC (Auth Service not reachable yet)');
+            // Synchronous call to Auth Service
+            await this.authClient.verifyToken(authToken);
+            console.log(`[PaymentService] Auth verified for ${transactionId}`);
         } catch (err) {
+            console.error(`[PaymentService] Auth failed: ${err.message}`);
             throw new Error(`Authorization Failed: ${err.message}`);
         }
 
