@@ -1,0 +1,84 @@
+# Node modules (root and any service folders)
+node_modules/
+**/node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+logs/
+*.log
+
+# Runtime / process files
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Build output
+dist/
+build/
+out/
+lib/
+**/dist/
+**/build/
+
+# TypeScript build info
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# Coverage
+coverage/
+**/coverage/
+.nyc_output/
+
+# Environment and secrets (keep .env.example in repo)
+.env
+.env.local
+.env.*.local
+.env.test
+.env.production
+secrets/
+*.key
+*.pem
+*.crt
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE / editor
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+*.swp
+*~
+
+# Monorepo / package managers
+lerna-debug.log
+.pnpm-store/
+.pnpm-debug.log
+.yarn-integrity
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+
+# Docker / container artifacts
+docker-compose.override.yml
+.docker/
+docker-compose.*.local.yml
+
+# Test artifacts
+coverage/
+jest-junit.xml
+test-results/
+
+# Misc
+*.log.*
+*.localhistory
+node-repl-history
+*.tgz
+*.zip
