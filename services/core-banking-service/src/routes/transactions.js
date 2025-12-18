@@ -122,5 +122,56 @@ router.post('/', async (req, res) => {
     }
 });
 
+// GET /transactions/:transaction_id
+router.get('/:transaction_id', async (req, res) => {
+    try {
+        const { transaction_id } = req.params;
+        const result = await db.query(
+            `SELECT * FROM transactions WHERE transaction_id = $1`,
+            [transaction_id]
+        );
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
+
+        const ledger = await db.query(
+            `SELECT * FROM transaction_ledger WHERE transaction_id = $1`,
+            [transaction_id]
+        );
+
+        res.json({ ...result.rows[0], ledger_entries: ledger.rows });
+    } catch (err) {
+        res.status(500).json({ error: 'Internal Error' });
+    }
+});
+
+// GET /transactions/accounts/:account_id
+router.get('/accounts/:account_id', async (req, res) => {
+    try {
+        const { account_id } = req.params;
+        const { page = 1, limit = 20 } = req.query;
+        const offset = (page - 1) * limit;
+
+        const result = await db.query(
+            `SELECT * FROM transactions 
+             WHERE from_account_id = $1 OR to_account_id = $1 
+             ORDER BY created_at DESC 
+             LIMIT $2 OFFSET $3`,
+            [account_id, limit, offset]
+        );
+
+        const countRes = await db.query(
+            `SELECT COUNT(*) FROM transactions WHERE from_account_id = $1 OR to_account_id = $1`,
+            [account_id]
+        );
+
+        res.json({
+            transactions: result.rows,
+            total: parseInt(countRes.rows[0].count),
+            page: parseInt(page),
+            limit: parseInt(limit)
+        });
+    } catch (err) {
+        res.status(500).json({ error: 'Internal Error' });
+    }
+});
 
 module.exports = router;
