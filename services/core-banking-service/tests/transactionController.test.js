@@ -1,0 +1,61 @@
+const TransactionController = require('../src/controllers/transactionController');
+const TransactionService = require('../src/services/transactionService');
+
+jest.mock('../src/services/transactionService');
+
+describe('TransactionController', () => {
+    let req, res;
+
+    beforeEach(() => {
+        req = { body: {}, params: {} };
+        res = {
+            status: jest.fn().mockReturnThis(),
+            json: jest.fn()
+        };
+        jest.clearAllMocks();
+    });
+
+    describe('transfer', () => {
+        it('should process transfer', async () => {
+            req.body = { amount: 100 };
+            const mockTx = { transaction_id: 't1', status: 'COMPLETED' };
+            TransactionService.transfer.mockResolvedValue(mockTx);
+
+            await TransactionController.transfer(req, res);
+
+            expect(TransactionService.transfer).toHaveBeenCalledWith(req.body);
+            expect(res.status).toHaveBeenCalledWith(201);
+            expect(res.json).toHaveBeenCalledWith(mockTx);
+        });
+
+        it('should handle errors', async () => {
+            TransactionService.transfer.mockRejectedValue(new Error('Insufficient funds'));
+            await TransactionController.transfer(req, res);
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(res.json).toHaveBeenCalledWith({ error: 'Insufficient funds' });
+        });
+    });
+
+    describe('deposit', () => {
+        it('should process deposit', async () => {
+            req.body = { amount: 50 };
+            const mockTx = { transaction_id: 't2', status: 'COMPLETED' };
+            TransactionService.deposit.mockResolvedValue(mockTx);
+
+            await TransactionController.deposit(req, res);
+            expect(res.status).toHaveBeenCalledWith(201);
+            expect(res.json).toHaveBeenCalledWith(mockTx);
+        });
+    });
+
+    describe('getTransaction', () => {
+        it('should return transaction', async () => {
+            req.params.transaction_id = 't1';
+            const mockTx = { transaction_id: 't1' };
+            TransactionService.getTransaction.mockResolvedValue(mockTx);
+
+            await TransactionController.getTransaction(req, res);
+            expect(res.json).toHaveBeenCalledWith(mockTx);
+        });
+    });
+});
