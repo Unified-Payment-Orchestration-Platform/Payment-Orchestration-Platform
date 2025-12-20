@@ -20,6 +20,25 @@ services:
     networks:
       - app-network
 
+  auth-service:
+    build:
+      context: ./services/auth-service/
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres_user
+      - DB_PASSWORD=postgres_pass
+      - DB_NAME=app_db
+      - JWT_SECRET=dev_secret_key_change_me
+    depends_on:
+      - db
+    networks:
+      - app-network
+
   db:
     image: postgres:16-alpine  # Lightweight PostgreSQL image
     ports:
