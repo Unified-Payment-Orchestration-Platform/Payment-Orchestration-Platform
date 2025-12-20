@@ -8,6 +8,7 @@ const httpProxy = require('express-http-proxy');
 const morgan = require('morgan');
 const helmet = require('helmet');
 const cors = require('cors');
+const requestLogger = require('./middleware/requestLogger');
 
 dotenv.config(); // Load environment variables from .env
 
@@ -15,6 +16,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Middleware for logging, security, and CORS
+app.use(requestLogger('API-GATEWAY'));
 app.use(morgan('combined')); // Logging for monitoring and debugging
 app.use(helmet()); // Security headers (e.g., XSS protection)
 app.use(cors()); // Enable CORS for client-side requests
@@ -59,24 +61,22 @@ app.get('/health', async (req, res) => {
 });
 
 // Import Routes
-const paymentRoutes = require('./routes/paymentRoutes');
 
-// Mount Routes
-app.use('/v1/payments', paymentRoutes);
 
 
 // Proxy routes to downstream microservices (generic routing)
 // Example: Proxy /auth/* to auth-service
 // Proxy /auth/* to auth-service
+// Proxy /auth/* to auth-service
 app.use('/auth', (req, res, next) => {
-  req.url = req.url.replace('/auth', '');
+  req.url = '/auth' + req.url; // Re-add prefix because app.use strips it, but auth-service expects /auth
   httpProxy('http://auth-service:3001')(req, res, next);
 });
 
-// Proxy /core/* to core-service
+// Proxy /core/* to core-banking-service
 app.use('/core', (req, res, next) => {
   req.url = req.url.replace('/core', '');
-  httpProxy('http://core-service:3002')(req, res, next);
+  httpProxy('http://core-banking-service:3005')(req, res, next);
 });
 
 
