@@ -3,17 +3,37 @@ version: '3.8'
 services:
   api-gateway-service:
     build:
-      context: ./services/api-gateway-service/  # Assumes Dockerfile is in the current directory
+      context: ./services/api-gateway-service/ # Assumes Dockerfile is in the current directory
     ports:
-      - "3000:3000"  # Map host port 3000 to container port 3000
+      - "3000:3000" # Map host port 3000 to container port 3000
     environment:
       - NODE_ENV=development
-      - DB_HOST=db  # Service name as hostname
+      - DB_HOST=db # Service name as hostname
       - DB_PORT=5432
       - DB_USER=postgres_user
       - DB_PASSWORD=postgres_pass
       - DB_NAME=app_db
-      - KAFKA_BROKER=kafka:9092  # For later Pub/Sub integration
+      - KAFKA_BROKER=kafka:9092 # For later Pub/Sub integration
+    depends_on:
+      - db
+      - kafka
+    networks:
+      - app-network
+
+  core-banking-service:
+    build:
+      context: ./services/core-banking-service/
+    ports:
+      - "3005:3005"
+    environment:
+      - NODE_ENV=development
+      - PORT=3005
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres_user
+      - DB_PASSWORD=postgres_pass
+      - DB_NAME=app_db
+      - KAFKA_BROKER=kafka:9092
     depends_on:
       - db
       - kafka
@@ -39,20 +59,35 @@ services:
     networks:
       - app-network
 
-  db:
-    image: postgres:16-alpine  # Lightweight PostgreSQL image
+  notification-service:
+    build:
+      context: ./services/notification-service/
     ports:
-      - "5432:5432"  # Expose for local tools like pgAdmin
+      - "3006:3006"
+    environment:
+      - NODE_ENV=development
+      - PORT=3006
+      - KAFKA_BROKER=kafka:9092
+    depends_on:
+      - kafka
+    networks:
+      - app-network
+
+  db:
+    image: postgres:16-alpine # Lightweight PostgreSQL image
+    ports:
+      - "5432:5432" # Expose for local tools like pgAdmin
     environment:
       - POSTGRES_USER=postgres_user
       - POSTGRES_PASSWORD=postgres_pass
       - POSTGRES_DB=app_db
     volumes:
-      - db-data:/var/lib/postgresql/data  # Persist data across restarts
+      - db-data:/var/lib/postgresql/data # Persist data across restarts
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql # Init DB script
     networks:
       - app-network
   zookeeper:
-    image: confluentinc/cp-zookeeper:7.6.0  # Standard for Kafka setups
+    image: confluentinc/cp-zookeeper:7.6.0 # Standard for Kafka setups
     ports:
       - "2181:2181"
     environment:
@@ -64,8 +99,7 @@ services:
   kafka:
     image: confluentinc/cp-kafka:7.6.0
     ports:
-      - "9092:9092"
-      - "29092:29092"  # For external access if needed
+      - "29092:9092" # For external access if needed
     depends_on:
       - zookeeper
     environment:
@@ -75,6 +109,8 @@ services:
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_ZOOKEEPER_SESSION_TIMEOUT_MS: 30000
+      KAFKA_ZOOKEEPER_CONNECTION_TIMEOUT_MS: 30000
     networks:
       - app-network
 
