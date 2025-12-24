@@ -27,6 +27,9 @@ components:
         email:
           type: string
           format: email
+        phone_number:
+          type: string
+          description: "International format (e.g. +1234567890)"
         role:
           type: string
         is_active:
@@ -44,6 +47,9 @@ components:
           type: string
         email:
           type: string
+        phone_number:
+          type: string
+          description: "Optional"
         password:
           type: string
     LoginRequest:
@@ -197,7 +203,58 @@ components:
         threshold:
           type: number
         is_active:
+        is_active:
           type: boolean
+
+    # --- Transaction Requests ---
+    TransferRequest:
+      type: object
+      required: [from_account_id, to_account_id, amount, currency, idempotency_key]
+      properties:
+        idempotency_key:
+          type: string
+        from_account_id:
+          type: string
+          format: uuid
+        to_account_id:
+          type: string
+          format: uuid
+        amount:
+          type: number
+        currency:
+          type: string
+        description:
+          type: string
+    DepositRequest:
+      type: object
+      required: [account_id, amount, currency, idempotency_key]
+      properties:
+        idempotency_key:
+          type: string
+        account_id:
+          type: string
+          format: uuid
+        amount:
+          type: number
+        currency:
+          type: string
+        provider:
+          type: string
+        provider_transaction_id:
+          type: string
+    WithdrawalRequest:
+      type: object
+      required: [account_id, amount, currency, idempotency_key]
+      properties:
+        idempotency_key:
+          type: string
+        account_id:
+          type: string
+          format: uuid
+        amount:
+          type: number
+        currency:
+          type: string
 
 paths:
   # --- Auth & Users ---
@@ -406,3 +463,60 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/FraudRule'
+
+
+
+  /core/transactions/transfer:
+    post:
+      tags: [Core Banking]
+      summary: Transfer Funds
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferRequest'
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+  /core/transactions/deposit:
+    post:
+      tags: [Core Banking]
+      summary: Deposit Funds
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DepositRequest'
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+  /core/transactions/withdrawal:
+    post:
+      tags: [Core Banking]
+      summary: Withdraw Funds
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WithdrawalRequest'
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
