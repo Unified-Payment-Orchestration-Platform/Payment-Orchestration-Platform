@@ -4,7 +4,7 @@ const db = require('../config/db');
 const { generateAccessToken, generateRefreshToken } = require('../utils/tokenUtils');
 
 class AuthService {
-    async register(username, email, password) {
+    async register(username, email, password, phone_number) {
         // Check if user exists
         const userCheck = await db.query('SELECT * FROM users WHERE email = $1', [email]);
         if (userCheck.rows.length > 0) {
@@ -15,8 +15,8 @@ class AuthService {
         const userId = `user-${uuidv4()}`;
 
         const newUser = await db.query(
-            'INSERT INTO users (user_id, username, email, password_hash) VALUES ($1, $2, $3, $4) RETURNING user_id, username, email, role',
-            [userId, username, email, hashedPassword]
+            'INSERT INTO users (user_id, username, email, password_hash, phone_number) VALUES ($1, $2, $3, $4, $5) RETURNING user_id, username, email, role, phone_number',
+            [userId, username, email, hashedPassword, phone_number]
         );
 
         return newUser.rows[0];

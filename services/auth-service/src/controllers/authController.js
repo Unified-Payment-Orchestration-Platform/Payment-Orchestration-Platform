@@ -3,10 +3,10 @@ const AuthService = require('../services/authService');
 class AuthController {
     async register(req, res) {
         try {
-            const { username, email, password } = req.body;
+            const { username, email, password, phone_number } = req.body;
             if (!username || !email || !password) return res.status(400).json({ error: 'Missing fields' });
 
-            const user = await AuthService.register(username, email, password);
+            const user = await AuthService.register(username, email, password, phone_number);
             // Generate tokens for immediate login after registration
             const { generateAccessToken, generateRefreshToken } = require('../utils/tokenUtils');
             const token = generateAccessToken(user);
@@ -18,7 +18,8 @@ class AuthController {
                 payload: {
                     user_id: user.user_id,
                     email: user.email,
-                    username: user.username
+                    username: user.username,
+                    phone_number: user.phone_number
                 }
             });
 
