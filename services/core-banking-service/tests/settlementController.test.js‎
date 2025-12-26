@@ -1,0 +1,26 @@
+const SettlementController = require('../src/controllers/settlementController');
+const SettlementService = require('../src/services/settlementService');
+
+jest.mock('../src/services/settlementService');
+
+describe('SettlementController', () => {
+    let req, res;
+
+    beforeEach(() => {
+        req = { body: {}, params: {} };
+        res = {
+            json: jest.fn(),
+            status: jest.fn().mockReturnThis()
+        };
+    });
+
+    describe('process', () => {
+        it('should process settlements', async () => {
+            const mockResult = { batch_id: 'b1' };
+            SettlementService.processSettlements.mockResolvedValue(mockResult);
+
+            await SettlementController.process(req, res);
+            expect(res.json).toHaveBeenCalledWith(mockResult);
+        });
+    });
+});
