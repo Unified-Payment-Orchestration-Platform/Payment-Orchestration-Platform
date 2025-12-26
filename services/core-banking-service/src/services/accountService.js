@@ -82,6 +82,14 @@ class AccountService {
         );
         return result.rows;
     }
+
+    async getAccountTransactions(accountId) {
+        const result = await db.query(
+            'SELECT * FROM transactions WHERE from_account_id = $1 OR to_account_id = $1 ORDER BY created_at DESC',
+            [accountId]
+        );
+        return result.rows;
+    }
 }
 
 module.exports = new AccountService();

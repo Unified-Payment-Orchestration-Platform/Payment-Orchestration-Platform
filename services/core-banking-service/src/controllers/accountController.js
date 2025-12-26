@@ -57,6 +57,16 @@ class AccountController {
             res.status(500).json({ error: error.message });
         }
     }
+
+    async getAccountTransactions(req, res) {
+        try {
+            const { account_id } = req.params;
+            const transactions = await AccountService.getAccountTransactions(account_id);
+            res.json(transactions);
+        } catch (error) {
+            res.status(500).json({ error: error.message });
+        }
+    }
 }
 
 module.exports = new AccountController();
