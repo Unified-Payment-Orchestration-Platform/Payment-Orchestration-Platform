@@ -6,6 +6,7 @@ CREATE TABLE users (
     user_id VARCHAR(50) PRIMARY KEY,
     username VARCHAR(100),
     email VARCHAR(150) UNIQUE NOT NULL,
+    phone_number VARCHAR(20),
     password_hash VARCHAR(255),
     role VARCHAR(50) DEFAULT 'user',
     is_active BOOLEAN DEFAULT TRUE,
