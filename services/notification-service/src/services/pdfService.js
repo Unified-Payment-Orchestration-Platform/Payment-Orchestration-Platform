@@ -23,10 +23,19 @@ class PDFService {
             doc.text(`Status: ${transaction.status}`);
 
             if (transaction.from_account_id) {
-                doc.text(`From Account: ${transaction.from_account_id}`);
+                const senderDisplay = transaction.sender_name
+                    ? `${transaction.sender_name} (Account: ...${transaction.from_account_id.slice(-4)})`
+                    : transaction.from_account_id;
+                doc.text(`From: ${senderDisplay}`);
             }
             if (transaction.to_account_id) {
-                doc.text(`To Account: ${transaction.to_account_id}`);
+                const receiverDisplay = transaction.receiver_name
+                    ? `${transaction.receiver_name} (Account: ...${transaction.to_account_id.slice(-4)})`
+                    : transaction.to_account_id;
+                doc.text(`To: ${receiverDisplay}`);
+            }
+            if (transaction.account_name) {
+                doc.text(`Account Holder: ${transaction.account_name}`);
             }
 
             doc.moveDown();
@@ -41,7 +50,7 @@ class PDFService {
             writeStream.on('error', (err) => {
                 reject(err);
             });
-        }); 
+        });
     }
 }
 
