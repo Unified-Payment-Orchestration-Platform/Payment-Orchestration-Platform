@@ -101,7 +101,11 @@ const runKafkaConsumer = async () => {
     });
 };
 
-app.listen(port, () => {
-    console.log(`Notification Service listening on port ${port}`);
-    runKafkaConsumer();
-});
+if (require.main === module) {
+    app.listen(port, () => {
+        console.log(`Notification Service listening on port ${port}`);
+        runKafkaConsumer();
+    });
+}
+
+module.exports = app;
