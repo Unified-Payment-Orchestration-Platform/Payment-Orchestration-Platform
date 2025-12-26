@@ -43,6 +43,9 @@ class NotificationService {
                 return result;
             } catch (error) {
                 console.error(`[SMS] Failed to send to ${phoneNumber}:`, error.message);
+                if (error.code === 21608) {
+                    console.log('[SMS TIP] This seems to be a Trial Account error. You can only send SMS to Verified Numbers.');
+                }
             }
         } else {
             // Mock SMS Sending
@@ -54,14 +57,14 @@ class NotificationService {
     }
 
     async sendEmail(to, subject, text) {
-        if (this.emailTransporter) {
+        // If user is 'mock_user', FORCE mock mode regardless of other settings
+        if (this.emailTransporter && process.env.EMAIL_USER !== 'mock_user') {
             try {
                 const info = await this.emailTransporter.sendMail({
                     from: process.env.EMAIL_FROM || '"UPOP Notification" <no-reply@upop.com>',
                     to: to,
                     subject: subject,
                     text: text,
-                    // html: "<b>Hello world?</b>", // html body
                 });
                 console.log(`[EMAIL] Sent to ${to}: ${info.messageId}`);
                 return info;
