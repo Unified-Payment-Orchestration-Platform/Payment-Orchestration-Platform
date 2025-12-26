@@ -203,7 +203,6 @@ components:
         threshold:
           type: number
         is_active:
-        is_active:
           type: boolean
 
     # --- Transaction Requests ---

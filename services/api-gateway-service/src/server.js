@@ -1,14 +1,15 @@
 // src/index.js
 
-const express = require('express');
-const dotenv = require('dotenv');
-const { Pool } = require('pg');
-const { Kafka } = require('kafkajs'); // For later Pub/Sub
-const httpProxy = require('express-http-proxy');
-const morgan = require('morgan');
-const helmet = require('helmet');
-const cors = require('cors');
-const requestLogger = require('./middleware/requestLogger');
+const express = require("express");
+const dotenv = require("dotenv");
+const { Pool } = require("pg");
+const { Kafka } = require("kafkajs"); // For later Pub/Sub
+const httpProxy = require("express-http-proxy");
+const axios = require("axios");
+const morgan = require("morgan");
+const helmet = require("helmet");
+const cors = require("cors");
+const requestLogger = require("./middleware/requestLogger");
 
 dotenv.config(); // Load environment variables from .env
 
@@ -16,8 +17,8 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Middleware for logging, security, and CORS
-app.use(requestLogger('API-GATEWAY'));
-app.use(morgan('combined')); // Logging for monitoring and debugging
+app.use(requestLogger("API-GATEWAY"));
+app.use(morgan("combined")); // Logging for monitoring and debugging
 app.use(helmet()); // Security headers (e.g., XSS protection)
 app.use(cors()); // Enable CORS for client-side requests
 app.use(express.json()); // Parse JSON bodies
@@ -44,51 +45,81 @@ await producer.connect();
 */
 
 // Health endpoint (required for monitoring; checks DB connection)
-app.get('/health', async (req, res) => {
+app.get("/health", async (req, res) => {
   try {
     const client = await pgPool.connect();
-    const result = await client.query('SELECT NOW()'); // Simple query to test DB
+    const result = await client.query("SELECT NOW()"); // Simple query to test DB
     client.release();
     res.status(200).json({
-      status: 'healthy',
-      db: 'connected',
+      status: "healthy",
+      db: "connected",
       timestamp: result.rows[0].now,
     });
   } catch (err) {
-    console.error('Health check failed:', err);
-    res.status(503).json({ status: 'unhealthy', error: 'DB connection failed' });
+    console.error("Health check failed:", err);
+    res
+      .status(503)
+      .json({ status: "unhealthy", error: "DB connection failed" });
   }
 });
 
 // Import Routes
 
-
-
 // Proxy routes to downstream microservices (generic routing)
-// Example: Proxy /auth/* to auth-service
 // Proxy /auth/* to auth-service
-// Proxy /auth/* to auth-service
-app.use('/auth', (req, res, next) => {
-  req.url = '/auth' + req.url; // Re-add prefix because app.use strips it, but auth-service expects /auth
-  httpProxy('http://auth-service:3001')(req, res, next);
+app.use("/auth", (req, res, next) => {
+  req.url = "/auth" + req.url; // Re-add prefix because app.use strips it, but auth-service expects /auth
+  httpProxy("http://auth-service:3001")(req, res, next);
+});
+
+// Proxy /users/* to auth-service (for user management, payment methods, subscriptions)
+// IMPORTANT: Place before /core to avoid route conflicts
+app.use("/users", (req, res, next) => {
+  req.url = "/users" + req.url; // Re-add prefix because app.use strips it, but auth-service expects /users
+  httpProxy("http://auth-service:3001")(req, res, next);
 });
 
 // Proxy /core/* to core-banking-service
-app.use('/core', (req, res, next) => {
-  req.url = req.url.replace('/core', '');
-  httpProxy('http://core-banking-service:3005')(req, res, next);
+app.use("/core", (req, res, next) => {
+  req.url = req.url.replace("/core", "");
+  httpProxy("http://core-banking-service:3005")(req, res, next);
 });
 
+// Proxy /payment-intents/* to payment orchestration (if exists)
+// TODO: Implement payment-intents-service or add to core-banking-service
+app.use("/payment-intents", (req, res) => {
+  res.status(501).json({
+    error: "Payment intents service not implemented",
+    message:
+      "Payment intents service not implemented. This feature is coming soon.",
+  });
+});
+
+// Proxy /compliance/* to core-banking-service (compliance is part of core banking)
+app.use("/compliance", (req, res, next) => {
+  req.url = "/compliance" + req.url; // Re-add prefix because core-banking-service expects /compliance
+  httpProxy("http://core-banking-service:3005")(req, res, next);
+});
+
+// Proxy /v1/payments to payment service
+app.use("/v1/payments", (req, res, next) => {
+  // This would proxy to payment processing service
+  // For now, return 404 or proxy to appropriate service
+  res.status(404).json({ error: "Payment service not implemented" });
+});
 
 // Root endpoint for testing
-app.get('/', (req, res) => {
-  res.json({ message: 'API Gateway is running. Use /health for status or /auth, /core for services.' });
+app.get("/", (req, res) => {
+  res.json({
+    message:
+      "API Gateway is running. Use /health for status or /auth, /core for services.",
+  });
 });
 
 // Global error handler
 app.use((err, req, res, next) => {
-  console.error('Error:', err.stack);
-  res.status(500).json({ error: 'Internal Server Error' });
+  console.error("Error:", err.stack);
+  res.status(500).json({ error: "Internal Server Error" });
 });
 
 app.listen(port, async () => {
@@ -96,10 +127,10 @@ app.listen(port, async () => {
   // Optional: Test DB connection on startup
   try {
     const client = await pgPool.connect();
-    console.log('Connected to PostgreSQL');
+    console.log("Connected to PostgreSQL");
     client.release();
   } catch (err) {
-    console.error('Failed to connect to PostgreSQL:', err);
+    console.error("Failed to connect to PostgreSQL:", err);
   }
   // Kafka connection test (uncomment when ready)
   // await producer.connect();
