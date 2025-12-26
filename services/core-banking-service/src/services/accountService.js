@@ -26,10 +26,14 @@ class AccountService {
 
             await client.query('COMMIT');
 
+            // Fetch User Phone
+            const userRes = await client.query('SELECT phone_number FROM users WHERE user_id = $1', [user_id]);
+            const userPhone = userRes.rows[0]?.phone_number;
+
             // 3. Publish Event (Non-blocking)
             publishEvent('account-events', {
                 type: 'AccountCreated',
-                payload: { account_id: account.account_id, user_id: account.user_id, currency: account.currency }
+                payload: { account_id: account.account_id, user_id: account.user_id, currency: account.currency, phone_number: userPhone }
             });
 
             return { ...account, balance: '0.00' };

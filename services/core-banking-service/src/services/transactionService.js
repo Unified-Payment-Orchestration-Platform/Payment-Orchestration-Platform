@@ -41,9 +41,33 @@ class TransactionService {
             await client.query('COMMIT');
 
             // 5. Publish Event
+            await client.query('COMMIT');
+
+            // Fetch Sender and Receiver Phone Numbers AND Usernames
+            const senderRes = await client.query(
+                `SELECT u.phone_number, u.email, u.username FROM accounts a 
+                 JOIN users u ON a.user_id = u.user_id 
+                 WHERE a.account_id = $1`,
+                [from_account_id]
+            );
+            const receiverRes = await client.query(
+                `SELECT u.phone_number, u.email, u.username FROM accounts a 
+                 JOIN users u ON a.user_id = u.user_id 
+                 WHERE a.account_id = $1`,
+                [to_account_id]
+            );
+
             publishEvent('transaction-events', {
                 type: 'TransactionCompleted',
-                payload: transaction
+                payload: {
+                    ...transaction,
+                    sender_phone: senderRes.rows[0]?.phone_number,
+                    sender_email: senderRes.rows[0]?.email,
+                    sender_name: senderRes.rows[0]?.username,
+                    receiver_phone: receiverRes.rows[0]?.phone_number,
+                    receiver_email: receiverRes.rows[0]?.email,
+                    receiver_name: receiverRes.rows[0]?.username
+                }
             });
 
             return transaction;
@@ -77,9 +101,31 @@ class TransactionService {
             await this.createLedgerEntry(client, transactionId, account_id, 'CREDIT', amount, currency, `Deposit from ${provider}`);
 
             await client.query('COMMIT');
+
+            await client.query('COMMIT');
+
+            // Fetch User Phone and Name (Enrichment)
+            const userRes = await client.query(
+                `SELECT u.phone_number, u.username FROM accounts a 
+                 JOIN users u ON a.user_id = u.user_id 
+                 WHERE a.account_id = $1`,
+                [account_id]
+            );
+            const userPhone = userRes.rows[0]?.phone_number;
+            const userName = userRes.rows[0]?.username;
+
+            publishEvent('transaction-events', {
+                type: 'TransactionCompleted',
+                payload: { ...txRes.rows[0], phone_number: userPhone, account_name: userName }
+            });
+
             return txRes.rows[0];
         } catch (e) {
             await client.query('ROLLBACK');
+            publishEvent('transaction-events', {
+                type: 'TransactionFailed',
+                payload: { idempotency_key, reason: e.message, transaction_type: 'DEPOSIT' }
+            });
             throw e;
         } finally {
             client.release();
@@ -108,9 +154,31 @@ class TransactionService {
             await this.createLedgerEntry(client, transactionId, account_id, 'DEBIT', amount, currency, 'Withdrawal');
 
             await client.query('COMMIT');
+
+            await client.query('COMMIT');
+
+            // Fetch User Phone and Name (Enrichment)
+            const userRes = await client.query(
+                `SELECT u.phone_number, u.username FROM accounts a 
+                 JOIN users u ON a.user_id = u.user_id 
+                 WHERE a.account_id = $1`,
+                [account_id]
+            );
+            const userPhone = userRes.rows[0]?.phone_number;
+            const userName = userRes.rows[0]?.username;
+
+            publishEvent('transaction-events', {
+                type: 'TransactionCompleted',
+                payload: { ...txRes.rows[0], phone_number: userPhone, account_name: userName }
+            });
+
             return txRes.rows[0];
         } catch (e) {
             await client.query('ROLLBACK');
+            publishEvent('transaction-events', {
+                type: 'TransactionFailed',
+                payload: { idempotency_key, reason: e.message, transaction_type: 'WITHDRAWAL' }
+            });
             throw e;
         } finally {
             client.release();
