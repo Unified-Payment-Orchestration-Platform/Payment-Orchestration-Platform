@@ -29,7 +29,7 @@ describe('AuthController', () => {
 
             await AuthController.register(req, res);
 
-            expect(AuthService.register).toHaveBeenCalledWith('test', 'test@test.com', 'password');
+            expect(AuthService.register).toHaveBeenCalledWith('test', 'test@test.com', 'password', undefined);
             expect(res.status).toHaveBeenCalledWith(201);
             expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
                 message: 'User registered',
