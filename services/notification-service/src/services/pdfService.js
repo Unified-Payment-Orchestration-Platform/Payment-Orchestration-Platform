@@ -7,7 +7,11 @@ class PDFService {
         return new Promise((resolve, reject) => {
             const doc = new PDFDocument();
             const fileName = `txn_${transaction.transaction_id}.pdf`;
-            const filePath = path.join(__dirname, '../../storage', fileName);
+            const storageDir = path.join(__dirname, '../../storage');
+            if (!fs.existsSync(storageDir)) {
+                fs.mkdirSync(storageDir, { recursive: true });
+            }
+            const filePath = path.join(storageDir, fileName);
             const writeStream = fs.createWriteStream(filePath);
 
             doc.pipe(writeStream);
