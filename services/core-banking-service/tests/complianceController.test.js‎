@@ -1,0 +1,27 @@
+const ComplianceController = require('../src/controllers/complianceController');
+const ComplianceService = require('../src/services/complianceService');
+
+jest.mock('../src/services/complianceService');
+
+describe('ComplianceController', () => {
+    let req, res;
+
+    beforeEach(() => {
+        req = { body: {}, params: {} };
+        res = {
+            json: jest.fn(),
+            status: jest.fn().mockReturnThis()
+        };
+    });
+
+    describe('check', () => {
+        it('should check compliance', async () => {
+            req.body = { transaction_payload: { amount: 100 } };
+            const mockResult = { compliant: true };
+            ComplianceService.checkCompliance.mockResolvedValue(mockResult);
+
+            await ComplianceController.check(req, res);
+            expect(res.json).toHaveBeenCalledWith(mockResult);
+        });
+    });
+});
