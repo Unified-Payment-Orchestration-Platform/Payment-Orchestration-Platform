@@ -69,7 +69,13 @@ app.get('/health', async (req, res) => {
 // Proxy /auth/* to auth-service
 // Proxy /auth/* to auth-service
 app.use('/auth', (req, res, next) => {
-  req.url = '/auth' + req.url; // Re-add prefix because app.use strips it, but auth-service expects /auth
+  // If the request is for /users (e.g. /auth/users/...), we want to forward it as /users/...
+  // effectively mapping /auth/users -> /users on auth-service
+  if (req.url.startsWith('/users')) {
+
+  } else {
+    req.url = '/auth' + req.url;
+  }
   httpProxy('http://auth-service:3001')(req, res, next);
 });
 
@@ -91,17 +97,21 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal Server Error' });
 });
 
-app.listen(port, async () => {
-  console.log(`API Gateway listening on port ${port}`);
-  // Optional: Test DB connection on startup
-  try {
-    const client = await pgPool.connect();
-    console.log('Connected to PostgreSQL');
-    client.release();
-  } catch (err) {
-    console.error('Failed to connect to PostgreSQL:', err);
-  }
-  // Kafka connection test (uncomment when ready)
-  // await producer.connect();
-  // console.log('Connected to Kafka');
-});
+if (require.main === module) {
+  app.listen(port, async () => {
+    console.log(`API Gateway listening on port ${port}`);
+    // Optional: Test DB connection on startup
+    try {
+      const client = await pgPool.connect();
+      console.log('Connected to PostgreSQL');
+      client.release();
+    } catch (err) {
+      console.error('Failed to connect to PostgreSQL:', err);
+    }
+    // Kafka connection test (uncomment when ready)
+    // await producer.connect();
+    // console.log('Connected to Kafka');
+  });
+}
+
+module.exports = app;
