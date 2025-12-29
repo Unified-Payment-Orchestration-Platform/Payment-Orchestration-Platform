@@ -30,8 +30,15 @@ CREATE TABLE payment_methods (
 CREATE TABLE subscriptions (
     subscription_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id VARCHAR(50) NOT NULL,
-    channels TEXT[],
-    event_types TEXT[],
+    channels TEXT[], -- Notification channels
+    event_types TEXT[], -- Notification events
+    -- Payment Subscription Fields
+    amount DECIMAL(20, 6) DEFAULT 0.0,
+    currency VARCHAR(3) DEFAULT 'USD',
+    frequency VARCHAR(20) DEFAULT 'MONTHLY', -- MONTHLY, BI_MONTHLY
+    provider_id VARCHAR(50), -- e.g., 'NETFLIX', 'GYM'
+    next_payment_date TIMESTAMP,
+    is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(user_id)
 );
