@@ -4,19 +4,22 @@ const { v4: uuidv4 } = require('uuid');
 class SubscriptionService {
     async getSubscriptions(userId) {
         const result = await db.query(
-            'SELECT subscription_id, channels, event_types, created_at FROM subscriptions WHERE user_id = $1',
+            'SELECT subscription_id, channels, event_types, amount, currency, frequency, provider_id, next_payment_date, is_active, created_at FROM subscriptions WHERE user_id = $1',
             [userId]
         );
         return result.rows;
     }
 
     async createSubscription(userId, data) {
-        const { channels, event_types } = data;
+        const { channels, event_types, amount, currency, frequency, provider_id, next_payment_date } = data;
         const subscriptionId = uuidv4();
 
         const result = await db.query(
-            'INSERT INTO subscriptions (subscription_id, user_id, channels, event_types, created_at) VALUES ($1, $2, $3, $4, NOW()) RETURNING subscription_id, channels, event_types, created_at',
-            [subscriptionId, userId, channels, event_types]
+            `INSERT INTO subscriptions 
+            (subscription_id, user_id, channels, event_types, amount, currency, frequency, provider_id, next_payment_date, created_at) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW()) 
+            RETURNING *`,
+            [subscriptionId, userId, channels, event_types, amount, currency, frequency, provider_id, next_payment_date]
         );
         return result.rows[0];
     }
