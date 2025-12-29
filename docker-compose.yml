@@ -8,12 +8,12 @@ services:
       - "3000:3000" # Map host port 3000 to container port 3000
     environment:
       - NODE_ENV=development
-      - DB_HOST=db # Service name as hostname
+      - DB_HOST=db
       - DB_PORT=5432
-      - DB_USER=postgres_user
-      - DB_PASSWORD=postgres_pass
-      - DB_NAME=app_db
-      - KAFKA_BROKER=kafka:9092 # For later Pub/Sub integration
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_NAME=${POSTGRES_DB}
+      - KAFKA_BROKER=${KAFKA_BROKER} # For later Pub/Sub integration
     depends_on:
       - db
       - kafka
@@ -30,10 +30,10 @@ services:
       - PORT=3005
       - DB_HOST=db
       - DB_PORT=5432
-      - DB_USER=postgres_user
-      - DB_PASSWORD=postgres_pass
-      - DB_NAME=app_db
-      - KAFKA_BROKER=kafka:9092
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_NAME=${POSTGRES_DB}
+      - KAFKA_BROKER=${KAFKA_BROKER}
     depends_on:
       - db
       - kafka
@@ -50,10 +50,10 @@ services:
       - PORT=3001
       - DB_HOST=db
       - DB_PORT=5432
-      - DB_USER=postgres_user
-      - DB_PASSWORD=postgres_pass
-      - DB_NAME=app_db
-      - JWT_SECRET=dev_secret_key_change_me
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_NAME=${POSTGRES_DB}
+      - JWT_SECRET=${JWT_SECRET}
     depends_on:
       - db
     networks:
@@ -67,7 +67,19 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3006
-      - KAFKA_BROKER=kafka:9092
+      - KAFKA_BROKER=${KAFKA_BROKER}
+      # Twilio Config
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+      - TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER}
+      # Email Config (Mock/Ethereal)
+      - EMAIL_HOST=${EMAIL_HOST}
+      - EMAIL_PORT=${EMAIL_PORT}
+      - EMAIL_USER=${EMAIL_USER}
+      - EMAIL_PASS=${EMAIL_PASS}
+      # SendGrid Config
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
+      - SENDGRID_FROM_EMAIL=${SENDGRID_FROM_EMAIL}
     depends_on:
       - kafka
     networks:
@@ -78,9 +90,9 @@ services:
     ports:
       - "5432:5432" # Expose for local tools like pgAdmin
     environment:
-      - POSTGRES_USER=postgres_user
-      - POSTGRES_PASSWORD=postgres_pass
-      - POSTGRES_DB=app_db
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
     volumes:
       - db-data:/var/lib/postgresql/data # Persist data across restarts
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql # Init DB script
@@ -111,6 +123,17 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_ZOOKEEPER_SESSION_TIMEOUT_MS: 30000
       KAFKA_ZOOKEEPER_CONNECTION_TIMEOUT_MS: 30000
+    networks:
+      - app-network
+
+  nginx:
+    image: nginx:latest
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api-gateway-service
     networks:
       - app-network
 
