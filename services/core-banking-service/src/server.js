@@ -12,6 +12,9 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 3005;
 
+// Import Services
+const CronService = require('./services/cronService');
+
 app.use(requestLogger('CORE-BANKING-SERVICE'));
 app.use(morgan('combined'));
 app.use(helmet());
@@ -49,4 +52,5 @@ app.use((err, req, res, next) => {
 app.listen(port, async () => {
     console.log(`Core Banking Service listening on port ${port}`);
     await connectProducer();
+    CronService.start();
 });
