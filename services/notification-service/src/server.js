@@ -45,17 +45,22 @@ const runKafkaConsumer = async () => {
                     const receiptUrl = `http://localhost:${port}/receipts/${fileName}`;
 
                     if (transaction_type === 'TRANSFER') {
+                        // Check if it's a Subscription Payment
+                        const isSubscription = event.payload.idempotency_key && event.payload.idempotency_key.startsWith('sub_');
+                        const subjectSuffix = isSubscription ? 'Subscription Paid' : 'Transfer Sent';
+                        const receivedSubject = isSubscription ? 'Subscription Payment Received' : 'Funds Received';
+
                         // Notify Sender
                         const senderMsg = `You sent ${amount} ${currency}. Ref: ${transaction_id}. Receipt: ${receiptUrl}`;
                         const senderP = sender_phone || mockPhone;
                         await NotificationService.sendSMS(senderP, senderMsg);
-                        if (sender_email) await NotificationService.sendEmail(sender_email, 'Transfer Sent', senderMsg);
+                        if (sender_email) await NotificationService.sendEmail(sender_email, subjectSuffix, senderMsg);
 
                         // Notify Receiver
                         const receiverMsg = `You received ${amount} ${currency}. Ref: ${transaction_id}. Receipt: ${receiptUrl}`;
                         const receiverP = receiver_phone || mockPhone;
                         await NotificationService.sendSMS(receiverP, receiverMsg);
-                        if (receiver_email) await NotificationService.sendEmail(receiver_email, 'Funds Received', receiverMsg);
+                        if (receiver_email) await NotificationService.sendEmail(receiver_email, receivedSubject, receiverMsg);
 
                     } else {
                         // Deposit / Withdrawal

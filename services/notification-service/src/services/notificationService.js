@@ -1,5 +1,6 @@
 const twilio = require("twilio");
 const nodemailer = require("nodemailer");
+const sgMail = require('@sendgrid/mail');
 
 class NotificationService {
     constructor() {
@@ -15,12 +16,20 @@ class NotificationService {
             this.emailTransporter = nodemailer.createTransport({
                 host: process.env.EMAIL_HOST,
                 port: process.env.EMAIL_PORT || 587,
-                secure: false, // true for 465, false for other ports
+                secure: false,
                 auth: {
                     user: process.env.EMAIL_USER,
                     pass: process.env.EMAIL_PASS,
                 },
             });
+        }
+
+        // Initialize SendGrid
+        this.sendGridEnabled = false;
+        if (process.env.SENDGRID_API_KEY) {
+            sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+            this.sendGridEnabled = true;
+            console.log("SendGrid intialized.");
         }
     }
 
@@ -43,21 +52,37 @@ class NotificationService {
                 return result;
             } catch (error) {
                 console.error(`[SMS] Failed to send to ${phoneNumber}:`, error.message);
-                if (error.code === 21608) {
-                    console.log('[SMS TIP] This seems to be a Trial Account error. You can only send SMS to Verified Numbers.');
-                }
+                // Fallback to Mock
+                this._logMockSMS(phoneNumber, message, "Fallback (Twilio Error)");
             }
         } else {
-            // Mock SMS Sending
-            console.log('\n==================================================');
-            console.log(`[SMS GATEWAY (MOCK)] Sending to ${phoneNumber}:`);
-            console.log(message);
-            console.log('==================================================\n');
+            this._logMockSMS(phoneNumber, message, "Mock Mode");
         }
     }
 
     async sendEmail(to, subject, text) {
-        // If user is 'mock_user', FORCE mock mode regardless of other settings
+        // 1. SendGrid (Priority)
+        if (this.sendGridEnabled) {
+            const msg = {
+                to: to,
+                from: process.env.SENDGRID_FROM_EMAIL || 'test@example.com',
+                subject: subject,
+                text: text,
+                // html: `<strong>${text}</strong>`, // Optional: nice to have but text is sufficient
+            };
+
+            try {
+                await sgMail.send(msg);
+                console.log(`[EMAIL-SG] Sent to ${to}`);
+                return;
+            } catch (error) {
+                console.error(`[EMAIL-SG] Failed to send to ${to}:`, error.message);
+                if (error.response) console.error(error.response.body);
+                // Fallback to Next Method
+            }
+        }
+
+        // 2. Nodemailer
         if (this.emailTransporter && process.env.EMAIL_USER !== 'mock_user') {
             try {
                 const info = await this.emailTransporter.sendMail({
@@ -66,19 +91,31 @@ class NotificationService {
                     subject: subject,
                     text: text,
                 });
-                console.log(`[EMAIL] Sent to ${to}: ${info.messageId}`);
+                console.log(`[EMAIL-SMTP] Sent to ${to}: ${info.messageId}`);
                 return info;
             } catch (error) {
-                console.error(`[EMAIL] Failed to send to ${to}:`, error.message);
+                console.error(`[EMAIL-SMTP] Failed to send to ${to}:`, error.message);
+                // Fallback to Mock
             }
-        } else {
-            // Mock Email Sending
-            console.log('\n==================================================');
-            console.log(`[EMAIL GATEWAY (MOCK)] Sending to ${to}:`);
-            console.log(`Subject: ${subject}`);
-            console.log(text);
-            console.log('==================================================\n');
         }
+
+        // 3. Mock Fallback
+        this._logMockEmail(to, subject, text, "Mock Mode / Fallback");
+    }
+
+    _logMockSMS(phoneNumber, message, reason) {
+        console.log('\n==================================================');
+        console.log(`[SMS GATEWAY (MOCK)] Sending to ${phoneNumber} [${reason}]:`);
+        console.log(message);
+        console.log('==================================================\n');
+    }
+
+    _logMockEmail(to, subject, text, reason) {
+        console.log('\n==================================================');
+        console.log(`[EMAIL GATEWAY (MOCK)] Sending to ${to} [${reason}]:`);
+        console.log(`Subject: ${subject}`);
+        console.log(text);
+        console.log('==================================================\n');
     }
 }
 
