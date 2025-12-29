@@ -79,10 +79,30 @@ app.use('/auth', (req, res, next) => {
   httpProxy('http://auth-service:3001')(req, res, next);
 });
 
+// Proxy /users/* to auth-service
+app.use('/users', (req, res, next) => {
+  // We keep the /users prefix because auth-service mounts it at /users
+  // req.url here is the path after /users (e.g. /me)
+  // But auth-service expects /users/me.
+  // wait, existing /auth proxy does req.url = '/auth' + req.url
+  // express-http-proxy by default forwards the modified req.url.
+  // When using app.use('/path', ...), req.url is stripped of '/path'.
+  // So for /users/me, req.url is /me.
+  // Auth service expects /users/me.
+  // So we need to prepend /users.
+  req.url = '/users' + req.url;
+  httpProxy('http://auth-service:3001')(req, res, next);
+});
+
 // Proxy /core/* to core-banking-service
 app.use('/core', (req, res, next) => {
   req.url = req.url.replace('/core', '');
   httpProxy('http://core-banking-service:3005')(req, res, next);
+});
+
+// Proxy /receipts/* to notification-service
+app.use('/receipts', (req, res, next) => {
+  httpProxy('http://notification-service:3006')(req, res, next);
 });
 
 
