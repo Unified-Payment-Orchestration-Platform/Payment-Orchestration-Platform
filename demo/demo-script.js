@@ -1,7 +1,7 @@
 const axios = require('axios');
 const colors = require('colors');
 
-const GATEWAY_URL = 'http://localhost:3000';
+const GATEWAY_URL = 'http://localhost';
 const NOTIFICATION_URL = 'http://localhost:3006';
 
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -21,10 +21,10 @@ const runDemo = async () => {
         // ---------------------------------------------------------
         logStep(1, 'Registering User A (Sender)');
         const userA = {
-            username: 'Samrawit Gebremaryam',
-            email: `samrawitgebremarym121@gmail.com`,
+            username: 'Saad Musema',
+            email: `musemrrasa6ad3333436@gmail.com`,
             password: 'password123',
-            phone_number: '+251989985456'
+            phone_number: '+251900478653'
         };
         const regA = await axios.post(`${GATEWAY_URL}/auth/register`, userA);
         console.log('User A Registered:'.green, regA.data.user.user_id);
@@ -163,6 +163,47 @@ const runDemo = async () => {
         console.log('Please check the "notification-service" terminal for SMS/Email logs.'.magenta);
         console.log(`You can download the PDF receipt (if running) at: ${NOTIFICATION_URL}/receipts/txn_${txnId}.pdf`.blue.underline);
         console.log('\nDemo Completed Successfully!'.rainbow);
+
+        // ---------------------------------------------------------
+        // 11. Subscription Trial
+        // ---------------------------------------------------------
+        logStep(11, 'creating subscription for userA to pay userB');
+        console.log('Theory: User A subscribes to User B monthly service ($10/month). Next payment is immediate.'.gray);
+
+        const subscription = await axios.post(`${GATEWAY_URL}/auth/users/${userIdA}/subscriptions`, {
+            channels: ['EMAIL'],
+            event_types: ['PAYMENT_SUCCESS'],
+            amount: 10.00,
+            currency: 'USD',
+            frequency: 'MONTHLY',
+            provider_id: userB.username, // Using username as provider_id for this demo
+            next_payment_date: new Date().toISOString() // Trigger immediately
+        }, {
+            headers: { Authorization: `Bearer ${tokenA}` }
+        });
+        console.log('Subscription Created:'.green, subscription.data);
+        const subId = subscription.data.subscription_id;
+
+        // ---------------------------------------------------------
+        // 12. Verify Subscription Payment
+        // ---------------------------------------------------------
+        logStep(12, 'Waiting for Subscription Payment (Cron Job)');
+        console.log('Waiting 15 seconds for the cron job to process the due subscription...'.yellow);
+        await wait(15000);
+
+        console.log('Checking User A Transaction History again...'.cyan);
+        const historyA2 = await axios.get(`${GATEWAY_URL}/core/accounts/${accountIdA}/transactions`);
+        const subTxn = historyA2.data.find(t => t.to_account_id === accountIdB && parseFloat(t.amount) === 10.00);
+
+        if (subTxn) {
+            console.log('SUCCESS: Subscription Payment Found!'.green.bold);
+            console.log(subTxn);
+        } else {
+            console.log('FAIL: Subscription Payment NOT Found yet.'.red.bold);
+            console.log('Note: Ensure the cron job in core-banking-service is running.'.gray);
+        }
+
+        console.log('\nDemo Expansion Completed Successfully!'.rainbow);
 
     } catch (error) {
         console.error('Demo Failed:'.red, error.response ? error.response.data : error.message);
