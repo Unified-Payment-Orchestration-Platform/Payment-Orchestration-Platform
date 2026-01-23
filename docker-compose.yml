@@ -18,8 +18,10 @@ services:
       - KAFKA_BROKER=${KAFKA_BROKER} # For later Pub/Sub integration
 
     depends_on:
-      - db
-      - kafka
+      db:
+        condition: service_started
+      kafka:
+        condition: service_healthy
     networks:
       - app-network
 
@@ -39,8 +41,10 @@ services:
       - DB_REPLICA_HOST=db-replica
       - KAFKA_BROKER=${KAFKA_BROKER}
     depends_on:
-      - db
-      - kafka
+      db:
+        condition: service_started
+      kafka:
+        condition: service_healthy
     networks:
       - app-network
 
@@ -51,7 +55,8 @@ services:
       - NODE_ENV=development
       - KAFKA_BROKER=${KAFKA_BROKER}
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
     networks:
       - app-network
 
@@ -71,8 +76,10 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - KAFKA_BROKER=${KAFKA_BROKER}
     depends_on:
-      - db
-      - kafka
+      db:
+        condition: service_started
+      kafka:
+        condition: service_healthy
     networks:
       - app-network
 
@@ -101,8 +108,10 @@ services:
       - MAILHOG_HOST=mailhog
       - MAILHOG_PORT=1025
     depends_on:
-      - kafka
-      - mailhog
+      mailhog:
+        condition: service_started
+      kafka:
+        condition: service_healthy
     networks:
       - app-network
 
@@ -168,11 +177,12 @@ services:
       - app-network
 
   kafka-ui:
-    image: provectuslabs/kafka-ui:latest
+    image: provectuslabs/kafka-ui:v0.7.2
     ports:
       - "8080:8080"
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
