@@ -65,8 +65,7 @@ class AuthService {
     }
 
     async logout(token) {
-        // Without a stateful store (Redis/DB) for tokens, we can't strictly "revoke" a JWT.
-        // We could implement a blacklist here if a 'token_blacklist' table existed.
+        // Token revocation logic would go here.
         // For now, we assume client-side removal.
         return true;
     }
