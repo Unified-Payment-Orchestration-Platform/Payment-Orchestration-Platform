@@ -35,7 +35,7 @@ class CronService {
 
     async processSubscription(sub) {
         console.log(`Processing subscription ${sub.subscription_id} for user ${sub.user_id}`);
-        const client = await db.getClient();
+        const client = await db.getWriteClient();
         try {
             // 1. Get User's Source Account (Default to first one)
             const accountRes = await client.query(

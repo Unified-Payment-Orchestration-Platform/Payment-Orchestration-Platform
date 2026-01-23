@@ -6,7 +6,7 @@ class AccountService {
     async createAccount(data) {
         const { user_id, account_type, currency } = data;
         const accountId = uuidv4();
-        const client = await db.getClient();
+        const client = await db.getWriteClient();
 
         try {
             await client.query('BEGIN');

@@ -6,7 +6,7 @@ class TransactionService {
     async transfer(data) {
         const { idempotency_key, from_account_id, to_account_id, amount, currency, description } = data;
         const transactionId = uuidv4();
-        const client = await db.getClient();
+        const client = await db.getWriteClient(); // Use Write Client
 
         try {
             await client.query('BEGIN');
@@ -41,8 +41,6 @@ class TransactionService {
             await client.query('COMMIT');
 
             // 5. Publish Event
-            await client.query('COMMIT');
-
             // Fetch Sender and Receiver Phone Numbers AND Usernames
             const senderRes = await client.query(
                 `SELECT u.phone_number, u.email, u.username FROM accounts a 
@@ -86,7 +84,7 @@ class TransactionService {
     async deposit(data) {
         const { idempotency_key, account_id, amount, currency, provider, provider_transaction_id } = data;
         const transactionId = uuidv4();
-        const client = await db.getClient();
+        const client = await db.getWriteClient(); // Write Client
 
         try {
             await client.query('BEGIN');
@@ -99,8 +97,6 @@ class TransactionService {
             );
 
             await this.createLedgerEntry(client, transactionId, account_id, 'CREDIT', amount, currency, `Deposit from ${provider}`);
-
-            await client.query('COMMIT');
 
             await client.query('COMMIT');
 
@@ -135,7 +131,7 @@ class TransactionService {
     async withdrawal(data) {
         const { idempotency_key, account_id, amount, currency } = data;
         const transactionId = uuidv4();
-        const client = await db.getClient();
+        const client = await db.getWriteClient();
 
         try {
             await client.query('BEGIN');
@@ -152,8 +148,6 @@ class TransactionService {
             );
 
             await this.createLedgerEntry(client, transactionId, account_id, 'DEBIT', amount, currency, 'Withdrawal');
-
-            await client.query('COMMIT');
 
             await client.query('COMMIT');
 
@@ -205,11 +199,13 @@ class TransactionService {
     }
 
     async getTransaction(transactionId) {
+        // Direct DB Query
         const result = await db.query('SELECT * FROM transactions WHERE transaction_id = $1', [transactionId]);
         return result.rows[0];
     }
 
     async getLedger(transactionId) {
+        // Simple read query, uses default db.query (Read Replica)
         const result = await db.query('SELECT * FROM transaction_ledger WHERE transaction_id = $1 ORDER BY created_at ASC', [transactionId]);
         return result.rows;
     }

@@ -10,9 +10,21 @@ class NotificationService {
             this.twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
         }
 
-        // Initialize Nodemailer
+        // Initialize Nodemailer (SMTP / MailHog)
         this.emailTransporter = null;
-        if (process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+
+        // MailHog (Dev) - No Auth
+        if (process.env.MAILHOG_HOST) {
+            this.emailTransporter = nodemailer.createTransport({
+                host: process.env.MAILHOG_HOST,
+                port: process.env.MAILHOG_PORT || 1025,
+                secure: false,
+                ignoreTLS: true
+            });
+            console.log("MailHog SMTP initialized.");
+        }
+        // Standard SMTP
+        else if (process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS) {
             this.emailTransporter = nodemailer.createTransport({
                 host: process.env.EMAIL_HOST,
                 port: process.env.EMAIL_PORT || 587,
