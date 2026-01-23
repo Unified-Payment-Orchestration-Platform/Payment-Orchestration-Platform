@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  labels:
+    app: frontend
+spec:
+  type: NodePort
+  ports:
+    - port: 3000
+      targetPort: 3000
+      nodePort: 30002 # Fixed port for easy access (Next.js runs on 3000 inside container)
+  selector:
+    app: frontend
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: frontend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          env:
+            # The frontend needs to talk to the API Gateway.
+            # In K8s, services communicate via DNS.
+            # However, for Client-Side Rendering (CSR), the browser needs a public URL.
+            # For Server-Side Rendering (SSR), the container needs an internal URL.
+            
+            # Internal URL for SSR
+            - name: API_URL
+              value: "http://api-gateway-service:3000"
+              
+            # Public URL for the Browser (assumes localhost access to NodePort)
+            - name: NEXT_PUBLIC_API_URL
+              value: "http://localhost:30000"
+              
+            - name: NEXT_PUBLIC_NOTIFICATION_SERVICE_URL
+              value: "http://localhost:3006" # Needs exposure if accessed directly...
+              # Wait, previous code accessed notification service directly for receipts?
+              # Ideally, everything should go through Gateway.

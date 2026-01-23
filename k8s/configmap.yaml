@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  NODE_ENV: "production"
+  # Database
+  DB_HOST: "postgres"
+  DB_PORT: "5432"
+  DB_NAME: "app_db"
+  DB_USER: "postgres_user"
+  # Kafka
+  KAFKA_BROKER: "kafka:9092"
+  # Service Ports
+  AUTH_SERVICE_PORT: "3001"
+  CORE_BANKING_SERVICE_PORT: "3005"
+  NOTIFICATION_SERVICE_PORT: "3006"
+  API_GATEWAY_PORT: "3000"
+  # Internal Service URLs (for Gateway)
+  AUTH_SERVICE_URL: "http://auth-service:3001"
+  CORE_BANKING_SERVICE_URL: "http://core-banking-service:3005"
+  NOTIFICATION_SERVICE_URL: "http://notification-service:3006"
