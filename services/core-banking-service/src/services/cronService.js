@@ -15,8 +15,8 @@ class CronService {
 
     async processSubscriptions() {
         try {
-            // Find due active subscriptions
-            const result = await db.query(
+            // Find due active subscriptions - use queryWrite to read from primary since replica is not set up yet
+            const result = await db.queryWrite(
                 `SELECT * FROM subscriptions 
                  WHERE is_active = TRUE 
                  AND (next_payment_date IS NULL OR next_payment_date <= NOW())`
@@ -50,10 +50,13 @@ class CronService {
 
             // 2. Get Provider's Target Account
             // We assume provider_id is the username of the merchant/provider
+            // Get the most recent account for this username to avoid conflicts with old demo data
             const providerRes = await client.query(
                 `SELECT a.account_id FROM accounts a 
                  JOIN users u ON a.user_id = u.user_id 
-                 WHERE u.username = $1 LIMIT 1`,
+                 WHERE u.username = $1 
+                 ORDER BY a.created_at DESC 
+                 LIMIT 1`,
                 [sub.provider_id]
             );
 
@@ -92,7 +95,7 @@ class CronService {
         // If user meant twice a month (semimonthly), '14 days' or '15 days'. 
         // Given prompt "monthly or bi momthyl", likely means every month or every 2 months. 
 
-        await db.query(
+        await db.queryWrite(
             `UPDATE subscriptions 
              SET next_payment_date = NOW() + $1::INTERVAL 
              WHERE subscription_id = $2`,

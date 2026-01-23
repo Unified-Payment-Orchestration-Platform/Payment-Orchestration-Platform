@@ -1,4 +1,3 @@
-version: '3.8'
 
 services:
   api-gateway-service:
@@ -162,7 +161,14 @@ services:
     ports:
       - "29092:9092" # For external access if needed
     depends_on:
-      - zookeeper
+      zookeeper:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181

@@ -199,14 +199,14 @@ class TransactionService {
     }
 
     async getTransaction(transactionId) {
-        // Direct DB Query
-        const result = await db.query('SELECT * FROM transactions WHERE transaction_id = $1', [transactionId]);
+        // Use queryWrite to read from primary since replica is not set up yet
+        const result = await db.queryWrite('SELECT * FROM transactions WHERE transaction_id = $1', [transactionId]);
         return result.rows[0];
     }
 
     async getLedger(transactionId) {
-        // Simple read query, uses default db.query (Read Replica)
-        const result = await db.query('SELECT * FROM transaction_ledger WHERE transaction_id = $1 ORDER BY created_at ASC', [transactionId]);
+        // Use queryWrite to read from primary since replica is not set up yet
+        const result = await db.queryWrite('SELECT * FROM transaction_ledger WHERE transaction_id = $1 ORDER BY created_at ASC', [transactionId]);
         return result.rows;
     }
 

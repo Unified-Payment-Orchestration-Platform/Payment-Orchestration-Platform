@@ -46,7 +46,8 @@ class AccountService {
     }
 
     async getAccount(accountId) {
-        const result = await db.query(
+        // Use queryWrite to read from primary since replica is not set up yet
+        const result = await db.queryWrite(
             `SELECT a.account_id, a.user_id, a.account_type, a.currency, a.status, a.updated_at, ab.balance 
              FROM accounts a 
              JOIN account_balances ab ON a.account_id = ab.account_id 
@@ -57,7 +58,8 @@ class AccountService {
     }
 
     async getUserAccounts(userId) {
-        const result = await db.query(
+        // Use queryWrite to read from primary since replica is not set up yet
+        const result = await db.queryWrite(
             `SELECT a.account_id, a.account_type, a.currency, a.status, ab.balance 
              FROM accounts a 
              JOIN account_balances ab ON a.account_id = ab.account_id 
@@ -68,7 +70,7 @@ class AccountService {
     }
 
     async updateStatus(accountId, status) {
-        const result = await db.query(
+        const result = await db.queryWrite(
             'UPDATE accounts SET status = $1, updated_at = NOW() WHERE account_id = $2 RETURNING account_id, status, updated_at',
             [status, accountId]
         );
@@ -76,7 +78,8 @@ class AccountService {
     }
 
     async getBalanceHistory(accountId) {
-        const result = await db.query(
+        // Use queryWrite to read from primary since replica is not set up yet
+        const result = await db.queryWrite(
             'SELECT snapshot_id, balance, version, last_updated FROM account_balance_snapshots WHERE account_id = $1 ORDER BY last_updated DESC',
             [accountId]
         );
@@ -84,7 +87,8 @@ class AccountService {
     }
 
     async getAccountTransactions(accountId) {
-        const result = await db.query(
+        // Use queryWrite to read from primary since replica is not set up yet
+        const result = await db.queryWrite(
             'SELECT * FROM transactions WHERE from_account_id = $1 OR to_account_id = $1 ORDER BY created_at DESC',
             [accountId]
         );

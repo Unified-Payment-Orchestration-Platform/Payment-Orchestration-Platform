@@ -10,7 +10,8 @@ class SettlementService {
     }
 
     async getSettlement(settlementId) {
-        const result = await db.query('SELECT * FROM settlements WHERE settlement_id = $1', [settlementId]);
+        // Use queryWrite to read from primary since replica is not set up yet
+        const result = await db.queryWrite('SELECT * FROM settlements WHERE settlement_id = $1', [settlementId]);
         return result.rows[0];
     }
 }

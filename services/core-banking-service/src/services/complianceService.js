@@ -32,8 +32,8 @@ class ComplianceService {
     }
 
     async getLogs(transactionId) {
-        // Mock implementation for now as table might need setup or we just return empty
-        const result = await db.query('SELECT * FROM compliance_logs WHERE transaction_id = $1', [transactionId]);
+        // Use queryWrite to read from primary since replica is not set up yet
+        const result = await db.queryWrite('SELECT * FROM compliance_logs WHERE transaction_id = $1', [transactionId]);
         return result.rows;
     }
 }

@@ -30,7 +30,7 @@ const settlementRoutes = require('./routes/settlements');
 // Health Check
 app.get('/health', async (req, res) => {
     try {
-        await db.query('SELECT NOW()');
+        await db.queryWrite('SELECT NOW()');
         res.status(200).json({ status: 'healthy', db: 'connected' });
     } catch (err) {
         console.error(err);

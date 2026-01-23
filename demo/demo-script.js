@@ -22,7 +22,7 @@ const runDemo = async () => {
         logStep(1, 'Registering User A (Sender)');
         const userA = {
             username: 'Saad Musema',
-            email: `musemrrasa6ad3333436@gmail.com`,
+            email: `musem_${Date.now()}@gmail.com`,
             password: 'password123',
             phone_number: '+251900478653'
         };
