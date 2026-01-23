@@ -4,8 +4,10 @@ services:
   api-gateway-service:
     build:
       context: ./services/api-gateway-service/ # Assumes Dockerfile is in the current directory
-    ports:
-      - "3000:3000" # Map host port 3000 to container port 3000
+    deploy:
+      replicas: 2
+    # ports:
+    #   - "3000-3001:3000" # Removed to allow scaling without host port conflicts. Nginx handles LB.
     environment:
       - NODE_ENV=development
       - DB_HOST=db
@@ -14,6 +16,7 @@ services:
       - DB_PASSWORD=${POSTGRES_PASSWORD}
       - DB_NAME=${POSTGRES_DB}
       - KAFKA_BROKER=${KAFKA_BROKER} # For later Pub/Sub integration
+
     depends_on:
       - db
       - kafka
@@ -33,9 +36,21 @@ services:
       - DB_USER=${POSTGRES_USER}
       - DB_PASSWORD=${POSTGRES_PASSWORD}
       - DB_NAME=${POSTGRES_DB}
+      - DB_REPLICA_HOST=db-replica
       - KAFKA_BROKER=${KAFKA_BROKER}
     depends_on:
       - db
+      - kafka
+    networks:
+      - app-network
+
+  compliance-service:
+    build:
+      context: ./services/compliance-service/
+    environment:
+      - NODE_ENV=development
+      - KAFKA_BROKER=${KAFKA_BROKER}
+    depends_on:
       - kafka
     networks:
       - app-network
@@ -54,8 +69,10 @@ services:
       - DB_PASSWORD=${POSTGRES_PASSWORD}
       - DB_NAME=${POSTGRES_DB}
       - JWT_SECRET=${JWT_SECRET}
+      - KAFKA_BROKER=${KAFKA_BROKER}
     depends_on:
       - db
+      - kafka
     networks:
       - app-network
 
@@ -80,8 +97,12 @@ services:
       # SendGrid Config
       - SENDGRID_API_KEY=${SENDGRID_API_KEY}
       - SENDGRID_FROM_EMAIL=${SENDGRID_FROM_EMAIL}
+      # MailHog Config
+      - MAILHOG_HOST=mailhog
+      - MAILHOG_PORT=1025
     depends_on:
       - kafka
+      - mailhog
     networks:
       - app-network
 
@@ -98,6 +119,25 @@ services:
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql # Init DB script
     networks:
       - app-network
+  db-replica:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    depends_on:
+      - db
+    networks:
+      - app-network
+
+  mailhog:
+    image: mailhog/mailhog
+    ports:
+      - "1025:1025" # SMTP server
+      - "8025:8025" # Web UI
+    networks:
+      - app-network
+
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.0 # Standard for Kafka setups
     ports:
@@ -123,6 +163,20 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_ZOOKEEPER_SESSION_TIMEOUT_MS: 30000
       KAFKA_ZOOKEEPER_CONNECTION_TIMEOUT_MS: 30000
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    networks:
+      - app-network
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - "8080:8080"
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
     networks:
       - app-network
 
