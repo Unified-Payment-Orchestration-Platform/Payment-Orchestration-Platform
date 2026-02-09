@@ -79,8 +79,8 @@ The system uses the **Adapter Pattern** for external integrations:
 
 ### 1. Clone & Configure
 ```bash
-git clone https://github.com/your-repo/payment-platform.git
-cd payment-platform
+git clone https://github.com/Unified-Payment-Orchestration-Platform/Payment-Orchestration-Platform.git
+cd Payment-Orchestration-Platform
 # Copy example env (Ensure you set secure passwords for production!)
 cp .env.example .env
 ```
