@@ -1,0 +1,171 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-auth-replica
+  labels:
+    app: postgres-auth
+    role: replica
+spec:
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+  selector:
+    app: postgres-auth
+    role: replica
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-auth-replica
+spec:
+  serviceName: "postgres-auth-replica"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-auth
+      role: replica
+  template:
+    metadata:
+      labels:
+        app: postgres-auth
+        role: replica
+    spec:
+      initContainers:
+        - name: setup-replication
+          image: postgres:16-alpine
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              
+              # Wait for primary database to be ready
+              echo "Waiting for primary database to be ready..."
+              until pg_isready -h postgres-auth-primary; do
+                echo "Waiting for primary database..."
+                sleep 2
+              done
+              
+              # Wait a bit for replication user to be created
+              echo "Waiting for replication user to be available..."
+              sleep 10
+              
+              # Check if data directory is empty
+              if [ ! -d /var/lib/postgresql/data/pgdata ] || [ -z "$(ls -A /var/lib/postgresql/data/pgdata)" ]; then
+                echo "Initializing replica from primary..."
+                
+                # Perform base backup
+                PGPASSWORD=$POSTGRES_REPLICATION_PASSWORD pg_basebackup \
+                  -h postgres-auth-primary \
+                  -U $POSTGRES_REPLICATION_USER \
+                  -D /var/lib/postgresql/data/pgdata \
+                  -P \
+                  -W \
+                  -R \
+                  -X stream
+                
+                echo "Base backup completed"
+              else
+                echo "Data directory already exists, skipping base backup"
+              fi
+          env:
+            - name: POSTGRES_REPLICATION_USER
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_REPLICATION_USER
+            - name: POSTGRES_REPLICATION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_REPLICATION_PASSWORD
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: db-data
+              mountPath: /var/lib/postgresql/data
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: POSTGRES_DB
+              value: "auth_db"
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: AUTH_DB_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: DB_PASSWORD
+            - name: POSTGRES_REPLICATION_USER
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_REPLICATION_USER
+            - name: POSTGRES_REPLICATION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_REPLICATION_PASSWORD
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          command:
+            - /bin/sh
+            - -c
+            - |
+              # Ensure recovery mode is set
+              if [ ! -f /var/lib/postgresql/data/pgdata/standby.signal ]; then
+                touch /var/lib/postgresql/data/pgdata/standby.signal
+              fi
+              
+              # Start postgres in recovery mode (hot standby)
+              exec docker-entrypoint.sh postgres \
+                -c hot_standby=on \
+                -c max_standby_streaming_delay=30s \
+                -c listen_addresses='*'
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - pg_isready -U $(POSTGRES_USER) -d auth_db
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  # Check if replica is in recovery mode and streaming
+                  pg_isready -U $(POSTGRES_USER) -d auth_db && \
+                  psql -U $(POSTGRES_USER) -d auth_db -c "SELECT pg_is_in_recovery();" | grep -q "t"
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            timeoutSeconds: 3
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          volumeMounts:
+            - name: db-data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: db-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 1Gi

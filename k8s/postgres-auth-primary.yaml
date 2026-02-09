@@ -1,0 +1,170 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-auth-primary
+  labels:
+    app: postgres-auth
+    role: primary
+spec:
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+  clusterIP: None  # Headless service for StatefulSet
+  selector:
+    app: postgres-auth
+    role: primary
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-auth-primary
+spec:
+  serviceName: "postgres-auth-primary"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-auth
+      role: primary
+  template:
+    metadata:
+      labels:
+        app: postgres-auth
+        role: primary
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: POSTGRES_DB
+              value: "auth_db"
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: AUTH_DB_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: DB_PASSWORD
+            - name: POSTGRES_REPLICATION_USER
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_REPLICATION_USER
+            - name: POSTGRES_REPLICATION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_REPLICATION_PASSWORD
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          command:
+            - /bin/sh
+            - -c
+            - |
+              # Start postgres with replication settings
+              exec docker-entrypoint.sh postgres \
+                -c wal_level=replica \
+                -c max_wal_senders=10 \
+                -c max_replication_slots=10 \
+                -c hot_standby=on \
+                -c archive_mode=on \
+                -c archive_command='test ! -f /var/lib/postgresql/archive/%f && cp %p /var/lib/postgresql/archive/%f' \
+                -c listen_addresses='*'
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - pg_isready -U $(POSTGRES_USER) -d auth_db
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - pg_isready -U $(POSTGRES_USER) -d auth_db
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          volumeMounts:
+            - name: db-data
+              mountPath: /var/lib/postgresql/data
+            - name: init-script
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: init-script
+          configMap:
+            name: postgres-auth-init-script
+  volumeClaimTemplates:
+    - metadata:
+        name: db-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 1Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-auth-init-script
+data:
+  init.sql: |
+    -- Enable UUID extension if not already enabled
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+    -- Users Table
+    CREATE TABLE users (
+        user_id VARCHAR(50) PRIMARY KEY,
+        username VARCHAR(100),
+        email VARCHAR(150) UNIQUE NOT NULL,
+        phone_number VARCHAR(20),
+        password_hash VARCHAR(255),
+        role VARCHAR(50) DEFAULT 'user',
+        is_active BOOLEAN DEFAULT TRUE,
+        risk_profile VARCHAR(50),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Payment Methods Table
+    CREATE TABLE payment_methods (
+        method_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        user_id VARCHAR(50) NOT NULL,
+        type VARCHAR(50),
+        details JSONB,
+        is_default BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(user_id)
+    );
+
+    -- Subscriptions Table
+    CREATE TABLE subscriptions (
+        subscription_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        user_id VARCHAR(50) NOT NULL,
+        channels TEXT[],
+        event_types TEXT[],
+        amount DECIMAL(20, 6) DEFAULT 0.0,
+        currency VARCHAR(3) DEFAULT 'USD',
+        frequency VARCHAR(20) DEFAULT 'MONTHLY',
+        provider_id VARCHAR(50),
+        next_payment_date TIMESTAMP,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(user_id)
+    );
