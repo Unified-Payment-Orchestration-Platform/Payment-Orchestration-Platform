@@ -1,0 +1,419 @@
+\documentclass[aspectratio=169]{beamer}
+\usetheme{Madrid}
+\usecolortheme{default}
+
+\title{Payment Orchestration Platform}
+\subtitle{Scalable, Event-Driven Banking Architecture}
+\author{Group 6}
+\date{December 26, 2025}
+\institute{Progress Report}
+
+\begin{document}
+
+% Slide 1: Title
+\frame{\titlepage}
+
+% Slide 2: Project Overview
+\begin{frame}{Project Overview}
+    \textbf{Goal:} Build a robust, scalable payment orchestration platform for high-value financial transactions
+    
+    \vspace{0.5cm}
+    \textbf{Core Principles:}
+    \begin{itemize}
+        \item \textbf{Reliability}: ACID transactions, data consistency
+        \item \textbf{Scalability}: Microservices architecture
+        \item \textbf{Resilience}: Event-driven design with Kafka
+        \item \textbf{Security}: JWT authentication, API Gateway enforcement
+    \end{itemize}
+    
+    \vspace{0.5cm}
+    \textbf{Tech Stack:}
+    \begin{itemize}
+        \item Backend: Node.js, Express, PostgreSQL
+        \item Frontend: Next.js, React, TypeScript
+        \item Messaging: Apache Kafka
+        \item Infrastructure: Docker, Docker Compose, Nginx
+    \end{itemize}
+\end{frame}
+
+% Slide 3: System Architecture
+\begin{frame}{System Architecture}
+    \textbf{High-Level Design:}
+    \begin{center}
+        \begin{tabular}{c}
+            Frontend (Next.js) \\
+            $\downarrow$ \\
+            API Gateway (Nginx + Node.js) \\
+            $\downarrow$ \\
+            \begin{tabular}{ccc}
+                Auth Service & Core Banking & Notification \\
+                & Service & Service
+            \end{tabular} \\
+            $\downarrow$ \\
+            PostgreSQL + Kafka
+        \end{tabular}
+    \end{center}
+    
+    \vspace{0.5cm}
+    \textbf{Key Components:}
+    \begin{itemize}
+        \item Microservices: Loosely coupled, independently deployable
+        \item API Gateway: Single entry point, load balancing
+        \item Database: PostgreSQL with read/write replication
+        \item Event Bus: Kafka for asynchronous communication
+    \end{itemize}
+\end{frame}
+
+% Slide 4: Services Implemented
+\begin{frame}{Services Implemented}
+    \begin{columns}
+        \column{0.5\textwidth}
+        \textbf{1. API Gateway Service}
+        \begin{itemize}
+            \item Routes requests
+            \item Load balancing
+            \item Authentication validation
+            \item Health checks
+        \end{itemize}
+        
+        \textbf{2. Auth Service}
+        \begin{itemize}
+            \item User registration/login
+            \item JWT tokens
+            \item Payment methods
+            \item Subscriptions
+        \end{itemize}
+        
+        \column{0.5\textwidth}
+        \textbf{3. Core Banking Service}
+        \begin{itemize}
+            \item Account management
+            \item Transactions
+            \item Double-entry ledger
+            \item ACID guarantees
+        \end{itemize}
+        
+        \textbf{4. Notification Service}
+        \begin{itemize}
+            \item Kafka event consumer
+            \item Email/SMS notifications
+            \item PDF receipts
+        \end{itemize}
+    \end{columns}
+\end{frame}
+
+% Slide 5: Frontend Application
+\begin{frame}{Frontend Application}
+    \textbf{Next.js Web Application}
+    \begin{itemize}
+        \item Modern UI: React with TypeScript
+        \item Authentication: JWT-based login/register
+        \item Dashboard: Real-time financial data visualization
+    \end{itemize}
+    
+    \vspace{0.5cm}
+    \textbf{Features:}
+    \begin{itemize}
+        \item Account management
+        \item Transaction history
+        \item Payment methods
+        \item Subscriptions
+        \item Compliance monitoring
+    \end{itemize}
+    
+    \vspace{0.5cm}
+    \textbf{Integration:}
+    \begin{itemize}
+        \item Fully integrated with backend APIs
+        \item Real-time data updates
+        \item Error handling and user feedback
+    \end{itemize}
+\end{frame}
+
+% Slide 6: ACID Transactions
+\begin{frame}{ACID Transactions}
+    \textbf{Problem:} Money could "vanish" if service crashes mid-transfer
+    
+    \vspace{0.5cm}
+    \textbf{Solution: Atomic Database Transactions}
+    \begin{verbatim}
+BEGIN TRANSACTION;
+  UPDATE accounts SET balance = balance - 500 
+    WHERE account_id = 'A';
+  UPDATE accounts SET balance = balance + 500 
+    WHERE account_id = 'B';
+  INSERT INTO ledger_entries (...) VALUES (...);
+COMMIT;
+    \end{verbatim}
+    
+    \vspace{0.3cm}
+    \textbf{Implementation:}
+    \begin{itemize}
+        \item PostgreSQL transactions ensure atomicity
+        \item All steps succeed or none do
+        \item Automatic rollback on failure
+        \item Guarantees data consistency
+    \end{itemize}
+\end{frame}
+
+% Slide 7: Idempotency
+\begin{frame}{Idempotency}
+    \textbf{Problem:} Duplicate requests due to client retries or network failures
+    
+    \vspace{0.5cm}
+    \textbf{Solution: Idempotency Keys}
+    \begin{verbatim}
+Client Request:
+{
+  "idempotency_key": "unique-key-123",
+  "amount": 500,
+  "from_account": "A",
+  "to_account": "B"
+}
+
+Service Logic:
+1. Check if idempotency_key exists
+2. If exists → return cached response
+3. If new → process transaction and store result
+    \end{verbatim}
+    
+    \textbf{Benefits:}
+    \begin{itemize}
+        \item Prevents duplicate transactions
+        \item Safe retry mechanism
+        \item Guarantees funds deducted exactly once
+    \end{itemize}
+\end{frame}
+
+% Slide 8: Event-Driven Architecture
+\begin{frame}{Event-Driven Architecture}
+    \textbf{Decoupling Services:} Core Banking does not depend on Notification Service availability
+    
+    \vspace{0.5cm}
+    \textbf{Flow:}
+    \begin{enumerate}
+        \item Transaction completes in Core Banking
+        \item Event published to Kafka: \texttt{transaction-events}
+        \item Notification Service consumes event asynchronously
+        \item Sends Email/SMS + Generates PDF Receipt
+    \end{enumerate}
+    
+    \vspace{0.5cm}
+    \textbf{Benefits:}
+    \begin{itemize}
+        \item High availability
+        \item Faster client responses
+        \item Scalable notification processing
+        \item Loose coupling between services
+    \end{itemize}
+\end{frame}
+
+% Slide 9: Database Architecture
+\begin{frame}{Database Architecture}
+    \textbf{Read/Write Replication}
+    \begin{itemize}
+        \item \textbf{Primary Database}: Handles all write operations
+        \item \textbf{Replica Database}: Handles read operations
+    \end{itemize}
+    
+    \vspace{0.3cm}
+    \textbf{Benefits:}
+    \begin{itemize}
+        \item Improved read performance
+        \item High availability
+        \item Load distribution
+    \end{itemize}
+    
+    \vspace{0.5cm}
+    \textbf{Data Models:}
+    \begin{itemize}
+        \item Users: Authentication and profile data
+        \item Accounts: Financial accounts with balances
+        \item Transactions: Transaction records with status
+        \item Ledger Entries: Double-entry bookkeeping
+        \item Payment Methods: User payment options
+        \item Subscriptions: Recurring payment plans
+    \end{itemize}
+\end{frame}
+
+% Slide 10: Security Implementation
+\begin{frame}{Security Implementation}
+    \textbf{Authentication \& Authorization}
+    \begin{itemize}
+        \item JWT-based authentication
+        \item Access tokens and refresh tokens
+        \item Token validation at API Gateway
+        \item Role-based access control (RBAC)
+    \end{itemize}
+    
+    \vspace{0.5cm}
+    \textbf{API Gateway Security}
+    \begin{itemize}
+        \item Centralized authentication
+        \item Request validation
+        \item CORS configuration
+    \end{itemize}
+    
+    \vspace{0.5cm}
+    \textbf{Data Security}
+    \begin{itemize}
+        \item Password hashing (bcrypt)
+        \item Secure token storage
+        \item Database connection encryption
+    \end{itemize}
+\end{frame}
+
+% Slide 11: What We Built - Backend
+\begin{frame}{What We Built - Backend}
+    \textbf{Completed Features:}
+    
+    \vspace{0.3cm}
+    \textbf{1. Microservices Architecture}
+    \begin{itemize}
+        \item 4 core services (API Gateway, Auth, Core Banking, Notification)
+        \item Service-to-service communication
+        \item Health checks and monitoring
+    \end{itemize}
+    
+    \vspace{0.3cm}
+    \textbf{2. Database Layer}
+    \begin{itemize}
+        \item PostgreSQL with replication
+        \item ACID transaction support
+        \item Optimized queries with read/write splitting
+    \end{itemize}
+    
+    \vspace{0.3cm}
+    \textbf{3. Event-Driven Communication}
+    \begin{itemize}
+        \item Kafka integration
+        \item Event publishing and consumption
+        \item Asynchronous notification processing
+    \end{itemize}
+\end{frame}
+
+% Slide 12: What We Built - Frontend
+\begin{frame}{What We Built - Frontend}
+    \textbf{Completed Features:}
+    
+    \vspace{0.3cm}
+    \textbf{1. User Interface}
+    \begin{itemize}
+        \item Modern, responsive design
+        \item Dashboard with real-time data
+        \item Account management interface
+        \item Transaction history
+    \end{itemize}
+    
+    \vspace{0.3cm}
+    \textbf{2. Authentication Flow}
+    \begin{itemize}
+        \item User registration
+        \item Login/logout
+        \item Token management
+        \item Protected routes
+    \end{itemize}
+    
+    \vspace{0.3cm}
+    \textbf{3. Integration}
+    \begin{itemize}
+        \item Full API integration
+        \item Real-time data fetching
+        \item Error handling
+        \item User feedback
+    \end{itemize}
+\end{frame}
+
+% Slide 13: Current Status
+\begin{frame}{Current Status}
+    \textbf{Working Features:}
+    \begin{itemize}
+        \item User registration and authentication
+        \item Account creation and management
+        \item Financial transactions (deposit, withdrawal, transfer)
+        \item Payment methods management
+        \item Subscriptions management
+        \item Event-driven notifications
+        \item Frontend-backend integration
+    \end{itemize}
+    
+    \vspace{0.5cm}
+    \textbf{System Metrics:}
+    \begin{itemize}
+        \item Services Running: 13 containers
+        \item Database: Primary + Replica (healthy)
+        \item Message Broker: Kafka (healthy)
+        \item API Gateway: Load balanced (2 replicas)
+        \item Frontend: Next.js dev server
+    \end{itemize}
+\end{frame}
+
+% Slide 14: Technical Achievements
+\begin{frame}{Technical Achievements}
+    \begin{columns}
+        \column{0.5\textwidth}
+        \textbf{Distributed Systems Patterns}
+        \begin{itemize}
+            \item Microservices architecture
+            \item API Gateway pattern
+            \item Event-driven architecture
+            \item Database replication
+            \item Service discovery
+        \end{itemize}
+        
+        \column{0.5\textwidth}
+        \textbf{Data Consistency}
+        \begin{itemize}
+            \item ACID transactions
+            \item Idempotency implementation
+            \item Double-entry bookkeeping
+            \item Transaction rollback
+        \end{itemize}
+    \end{columns}
+    
+    \vspace{0.5cm}
+    \textbf{Scalability \& Performance}
+    \begin{itemize}
+        \item Read/write database splitting
+        \item Load balancing
+        \item Asynchronous processing
+        \item Container orchestration
+    \end{itemize}
+\end{frame}
+
+% Slide 15: Future Roadmap
+\begin{frame}{Future Roadmap}
+    \textbf{Short-Term Enhancements:}
+    \begin{itemize}
+        \item Fraud detection engine
+        \item Enhanced compliance checks
+        \item Payment provider integrations (Stripe, PayPal)
+        \item Real-time transaction monitoring
+    \end{itemize}
+    
+    \vspace{0.5cm}
+    \textbf{Long-Term Goals:}
+    \begin{itemize}
+        \item Kubernetes deployment
+        \item Multi-currency support
+        \item KYC (Know Your Customer) integration
+        \item Advanced analytics and reporting
+        \item Mobile application
+    \end{itemize}
+\end{frame}
+
+% Thank You Slide
+\begin{frame}
+    \centering
+    \Huge Thank You!
+    
+    \vspace{1cm}
+    \Large Questions?
+    
+    \vspace{1cm}
+    \normalsize
+    \textbf{Group 6}\\
+    Payment Orchestration Platform
+\end{frame}
+
+\end{document}

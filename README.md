@@ -145,6 +145,3 @@ npm test
 *   **Input Validation**: All endpoints use strict schema validation (Joi/Zod) to prevent injection attacks.
 
 ---
-
-## 📄 License
-MIT License - Free for personal and commercial use.
