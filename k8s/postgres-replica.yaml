@@ -1,0 +1,240 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-replica
+  labels:
+    app: postgres
+    role: replica
+spec:
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+  selector:
+    app: postgres
+    role: replica
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-replica
+spec:
+  serviceName: "postgres-replica"
+  replicas: 2  # Number of read replicas
+  selector:
+    matchLabels:
+      app: postgres
+      role: replica
+  template:
+    metadata:
+      labels:
+        app: postgres
+        role: replica
+    spec:
+      initContainers:
+        - name: setup-replication
+          image: postgres:16-alpine
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              
+              # Wait for primary database to be ready
+              echo "Waiting for primary database to be ready..."
+              until pg_isready -h postgres-primary; do
+                echo "Waiting for primary database..."
+                sleep 2
+              done
+              
+              # Wait a bit for replication user to be created by sidecar
+              echo "Waiting for replication user to be available..."
+              sleep 10
+              
+              # Verify replication user exists and can connect
+              until PGPASSWORD=$POSTGRES_REPLICATION_PASSWORD psql -h postgres-primary -U $POSTGRES_REPLICATION_USER -d postgres -c "SELECT 1;" > /dev/null 2>&1; do
+                echo "Waiting for replication user to be ready..."
+                sleep 2
+              done
+              echo "Replication user is ready"
+              
+              # Check if data directory is empty
+              if [ ! -d /var/lib/postgresql/data/pgdata ] || [ -z "$(ls -A /var/lib/postgresql/data/pgdata)" ]; then
+                echo "Initializing replica from primary..."
+                
+                # Perform base backup
+                PGPASSWORD=$POSTGRES_REPLICATION_PASSWORD pg_basebackup \
+                  -h postgres-primary \
+                  -U $POSTGRES_REPLICATION_USER \
+                  -D /var/lib/postgresql/data/pgdata \
+                  -P \
+                  -W \
+                  -R \
+                  -X stream
+                
+                echo "Base backup completed"
+              else
+                echo "Data directory already exists, skipping base backup"
+              fi
+              
+              # Create recovery.conf or update postgresql.auto.conf for streaming replication
+              # Use pod name with hyphens replaced by underscores for slot name
+              SLOT_NAME=$(echo "$(hostname)" | tr '-' '_')
+              cat > /var/lib/postgresql/data/pgdata/postgresql.auto.conf <<EOF
+              primary_conninfo = 'host=postgres-primary port=5432 user=$POSTGRES_REPLICATION_USER password=$POSTGRES_REPLICATION_PASSWORD'
+              primary_slot_name = 'replica_slot_${SLOT_NAME}'
+              EOF
+              
+              echo "Replica setup completed"
+          env:
+            - name: POSTGRES_REPLICATION_USER
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_REPLICATION_USER
+            - name: POSTGRES_REPLICATION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_REPLICATION_PASSWORD
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: db-data
+              mountPath: /var/lib/postgresql/data
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: DB_NAME
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: DB_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_REPLICATION_USER
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_REPLICATION_USER
+            - name: POSTGRES_REPLICATION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_REPLICATION_PASSWORD
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          command:
+            - /bin/sh
+            - -c
+            - |
+              # Ensure recovery mode is set
+              if [ ! -f /var/lib/postgresql/data/pgdata/standby.signal ]; then
+                touch /var/lib/postgresql/data/pgdata/standby.signal
+              fi
+              
+              # Start postgres in recovery mode (hot standby)
+              exec docker-entrypoint.sh postgres \
+                -c hot_standby=on \
+                -c max_standby_streaming_delay=30s \
+                -c listen_addresses='*'
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - pg_isready -U $(POSTGRES_USER) -d $(POSTGRES_DB)
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  # Check if replica is in recovery mode and streaming
+                  pg_isready -U $(POSTGRES_USER) -d $(POSTGRES_DB) && \
+                  psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) -c "SELECT pg_is_in_recovery();" | grep -q "t"
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            timeoutSeconds: 3
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "50m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          volumeMounts:
+            - name: db-data
+              mountPath: /var/lib/postgresql/data
+            - name: postgres-config
+              mountPath: /etc/postgresql/postgresql.conf
+              subPath: postgresql.conf
+            - name: postgres-config
+              mountPath: /var/lib/postgresql/data/pg_hba.conf
+              subPath: pg_hba.conf
+      volumes:
+        - name: postgres-config
+          configMap:
+            name: postgres-replica-config
+  volumeClaimTemplates:
+    - metadata:
+        name: db-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-replica-config
+data:
+  postgresql.conf: |
+    # Replica/Hot Standby settings
+    hot_standby = on
+    max_standby_streaming_delay = 30s
+    hot_standby_feedback = on
+    
+    # Connection settings
+    listen_addresses = '*'
+    port = 5432
+    max_connections = 200
+    
+    # Performance settings
+    shared_buffers = 128MB
+    effective_cache_size = 512MB
+    maintenance_work_mem = 64MB
+    default_statistics_target = 100
+    random_page_cost = 1.1
+    effective_io_concurrency = 200
+    
+    # Logging
+    log_destination = 'stderr'
+    logging_collector = on
+    log_directory = 'log'
+    log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'
+    log_statement = 'all'
+    log_duration = on
+  pg_hba.conf: |
+    # TYPE  DATABASE        USER            ADDRESS                 METHOD
+    local   all             all                                     trust
+    host    all             all             127.0.0.1/32            md5
+    host    all             all             ::1/128                 md5
+    # Allow application connections (read-only)
+    host    all             all             0.0.0.0/0               md5

@@ -1,0 +1,258 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-primary
+  labels:
+    app: postgres
+    role: primary
+spec:
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+  clusterIP: None  # Headless service for StatefulSet
+  selector:
+    app: postgres
+    role: primary
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-primary
+spec:
+  serviceName: "postgres-primary"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+      role: primary
+  template:
+    metadata:
+      labels:
+        app: postgres
+        role: primary
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: DB_NAME
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: DB_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_REPLICATION_USER
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_REPLICATION_USER
+            - name: POSTGRES_REPLICATION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_REPLICATION_PASSWORD
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          command:
+            - /bin/sh
+            - -c
+            - |
+              # Start postgres with replication settings
+              exec docker-entrypoint.sh postgres \
+                -c wal_level=replica \
+                -c max_wal_senders=10 \
+                -c max_replication_slots=10 \
+                -c hot_standby=on \
+                -c archive_mode=on \
+                -c archive_command='test ! -f /var/lib/postgresql/archive/%f && cp %p /var/lib/postgresql/archive/%f' \
+                -c listen_addresses='*'
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - pg_isready -U $(POSTGRES_USER) -d $(POSTGRES_DB)
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - pg_isready -U $(POSTGRES_USER) -d $(POSTGRES_DB)
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "50m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          volumeMounts:
+            - name: db-data
+              mountPath: /var/lib/postgresql/data
+            - name: postgres-config
+              mountPath: /etc/postgresql/postgresql.conf
+              subPath: postgresql.conf
+            - name: postgres-config
+              mountPath: /var/lib/postgresql/data/pg_hba.conf
+              subPath: pg_hba.conf
+            - name: init-script
+              mountPath: /docker-entrypoint-initdb.d
+            - name: archive
+              mountPath: /var/lib/postgresql/archive
+        - name: replication-setup
+          image: postgres:16-alpine
+          command:
+            - /bin/sh
+            - /scripts/replication-setup.sh
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: DB_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: DB_NAME
+            - name: POSTGRES_REPLICATION_USER
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_REPLICATION_USER
+            - name: POSTGRES_REPLICATION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_REPLICATION_PASSWORD
+          volumeMounts:
+            - name: replication-script
+              mountPath: /scripts
+      volumes:
+        - name: init-script
+          configMap:
+            name: postgres-init-script
+        - name: postgres-config
+          configMap:
+            name: postgres-primary-config
+        - name: archive
+          emptyDir: {}
+        - name: replication-script
+          configMap:
+            name: postgres-replication-setup-script
+            defaultMode: 0755
+  volumeClaimTemplates:
+    - metadata:
+        name: db-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-primary-config
+data:
+  postgresql.conf: |
+    # Replication settings
+    wal_level = replica
+    max_wal_senders = 10
+    max_replication_slots = 10
+    hot_standby = on
+    archive_mode = on
+    archive_command = 'test ! -f /var/lib/postgresql/archive/%f && cp %p /var/lib/postgresql/archive/%f'
+    
+    # Connection settings
+    listen_addresses = '*'
+    port = 5432
+    max_connections = 200
+    
+    # Performance settings
+    shared_buffers = 256MB
+    effective_cache_size = 1GB
+    maintenance_work_mem = 128MB
+    checkpoint_completion_target = 0.9
+    wal_buffers = 16MB
+    default_statistics_target = 100
+    random_page_cost = 1.1
+    effective_io_concurrency = 200
+    
+    # Logging
+    log_destination = 'stderr'
+    logging_collector = on
+    log_directory = 'log'
+    log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'
+    log_statement = 'all'
+    log_duration = on
+  pg_hba.conf: |
+    # TYPE  DATABASE        USER            ADDRESS                 METHOD
+    local   all             all                                     trust
+    host    all             all             127.0.0.1/32            md5
+    host    all             all             ::1/128                 md5
+    # Allow replication connections from replicas
+    host    replication     all             0.0.0.0/0               md5
+    # Allow application connections
+    host    all             all             0.0.0.0/0               md5
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-replication-setup-script
+data:
+  replication-setup.sh: |
+    #!/bin/sh
+    # This script runs as a sidecar container to set up replication user on the primary
+    # It waits for postgres to be ready, then creates the replication user if it doesn't exist
+
+    set -e
+
+    echo "Waiting for PostgreSQL to be ready..."
+    until PGPASSWORD=$POSTGRES_PASSWORD pg_isready -h localhost -U $POSTGRES_USER -d $POSTGRES_DB; do
+      echo "PostgreSQL is not ready yet..."
+      sleep 2
+    done
+
+    echo "PostgreSQL is ready. Setting up replication user..."
+
+    # Create replication user if it doesn't exist
+    PGPASSWORD=$POSTGRES_PASSWORD psql -h localhost -U $POSTGRES_USER -d $POSTGRES_DB <<EOF
+    DO \$\$
+    BEGIN
+      IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '$POSTGRES_REPLICATION_USER') THEN
+        CREATE USER $POSTGRES_REPLICATION_USER WITH REPLICATION PASSWORD '$POSTGRES_REPLICATION_PASSWORD';
+        RAISE NOTICE 'Replication user created';
+      ELSE
+        RAISE NOTICE 'Replication user already exists';
+      END IF;
+    END
+    \$\$;
+    EOF
+
+    echo "Replication setup complete. Keeping container alive..."
+    # Keep container running
+    tail -f /dev/null
