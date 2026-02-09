@@ -1,8 +1,11 @@
 const axios = require('axios');
 const colors = require('colors');
 
-const GATEWAY_URL = 'http://localhost';
-const NOTIFICATION_URL = 'http://localhost:3006';
+// Auto-detect environment
+// Kubernetes: API Gateway on NodePort 30000
+// Docker Compose: API Gateway behind nginx on port 80
+const GATEWAY_URL = process.env.GATEWAY_URL || 'http://localhost:80';
+const NOTIFICATION_URL = process.env.NOTIFICATION_URL || 'http://localhost:80/api/notifications';
 
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
