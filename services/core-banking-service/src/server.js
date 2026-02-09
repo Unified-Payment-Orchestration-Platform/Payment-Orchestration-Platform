@@ -4,6 +4,7 @@ const morgan = require('morgan');
 const helmet = require('helmet');
 const cors = require('cors');
 const { connectProducer } = require('./events/kafka');
+const { connectConsumer: connectAuthEventConsumer } = require('./events/authEventConsumer');
 const db = require('./db');
 const requestLogger = require('./middleware/requestLogger');
 
@@ -45,12 +46,24 @@ app.use('/compliance', complianceRoutes);
 app.use('/settlements', settlementRoutes);
 
 app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({ error: 'Internal Server Error' });
+    console.error('[Core Banking Service] Unhandled error:', err);
+    console.error('[Core Banking Service] Error stack:', err.stack);
+    console.error('[Core Banking Service] Error message:', err.message);
+    res.status(500).json({ 
+        error: 'Internal Server Error',
+        message: err.message,
+        details: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
 });
 
 app.listen(port, async () => {
     console.log(`Core Banking Service listening on port ${port}`);
     await connectProducer();
+    
+    // Connect to Kafka consumer to listen for auth events (user registrations)
+    // This enables cross-service interaction: when auth-service creates a user,
+    // core-banking automatically creates an account using the user_id
+    await connectAuthEventConsumer();
+    
     CronService.start();
 });
