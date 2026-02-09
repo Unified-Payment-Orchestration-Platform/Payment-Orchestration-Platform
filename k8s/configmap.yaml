@@ -4,13 +4,26 @@ metadata:
   name: app-config
 data:
   NODE_ENV: "production"
-  # Database
-  DB_HOST: "postgres"
+  # Auth Service Database
+  AUTH_DB_HOST: "postgres-auth-primary"  # Auth service primary database for writes
+  AUTH_DB_PORT: "5432"
+  AUTH_DB_NAME: "auth_db"
+  AUTH_DB_USER: "postgres_user"
+  AUTH_DB_REPLICA_HOST: "postgres-auth-replica"  # Auth service replica for reads
+  # Core Banking Service Database
+  CORE_BANKING_DB_HOST: "postgres-core-banking-primary"  # Core banking primary database for writes
+  CORE_BANKING_DB_PORT: "5432"
+  CORE_BANKING_DB_NAME: "core_banking_db"
+  CORE_BANKING_DB_USER: "postgres_user"
+  CORE_BANKING_DB_REPLICA_HOST: "postgres-core-banking-replica"  # Core banking replica for reads
+  # Legacy/Default (for api-gateway which uses auth-db)
+  DB_HOST: "postgres-auth-primary"
   DB_PORT: "5432"
-  DB_NAME: "app_db"
+  DB_NAME: "auth_db"
   DB_USER: "postgres_user"
+  DB_REPLICA_HOST: "postgres-auth-replica"
   # Kafka
-  KAFKA_BROKER: "kafka:9092"
+  KAFKA_BROKER: "kafka-svc:9092"
   # Service Ports
   AUTH_SERVICE_PORT: "3001"
   CORE_BANKING_SERVICE_PORT: "3005"

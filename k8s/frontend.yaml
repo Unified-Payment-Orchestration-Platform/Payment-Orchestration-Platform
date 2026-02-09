@@ -48,6 +48,27 @@ spec:
               value: "http://localhost:30000"
               
             - name: NEXT_PUBLIC_NOTIFICATION_SERVICE_URL
-              value: "http://localhost:3006" # Needs exposure if accessed directly...
-              # Wait, previous code accessed notification service directly for receipts?
-              # Ideally, everything should go through Gateway.
+              value: "http://localhost:30000/api/notifications"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
