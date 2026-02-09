@@ -10,8 +10,14 @@ class AccountController {
             const account = await AccountService.createAccount(req.body);
             res.status(201).json(account);
         } catch (error) {
-            console.error(error);
-            res.status(500).json({ error: 'Failed to create account' });
+            console.error('[AccountController] Error creating account:', error);
+            console.error('[AccountController] Error stack:', error.stack);
+            console.error('[AccountController] Error message:', error.message);
+            res.status(500).json({ 
+                error: 'Failed to create account',
+                message: error.message,
+                details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            });
         }
     }
 

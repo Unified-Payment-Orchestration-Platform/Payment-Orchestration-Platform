@@ -6,9 +6,12 @@ class AccountService {
     async createAccount(data) {
         const { user_id, account_type, currency } = data;
         const accountId = uuidv4();
-        const client = await db.getWriteClient();
-
+        let client;
+        
         try {
+            client = await db.getWriteClient();
+            console.log('[AccountService] Creating account with:', { accountId, user_id, account_type, currency });
+
             await client.query('BEGIN');
 
             // 1. Create Account
@@ -17,31 +20,48 @@ class AccountService {
                 [accountId, user_id, account_type, currency, 'ACTIVE']
             );
             const account = accountResult.rows[0];
+            console.log('[AccountService] Account created:', account.account_id);
 
             // 2. Initialize Balance (0.00)
             await client.query(
                 'INSERT INTO account_balances (account_id, balance, version, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW())',
                 [accountId, 0.00, 1]
             );
+            console.log('[AccountService] Balance initialized');
 
             await client.query('COMMIT');
-
-            // Fetch User Phone
-            const userRes = await client.query('SELECT phone_number FROM users WHERE user_id = $1', [user_id]);
-            const userPhone = userRes.rows[0]?.phone_number;
+            console.log('[AccountService] Transaction committed');
 
             // 3. Publish Event (Non-blocking)
-            publishEvent('account-events', {
-                type: 'AccountCreated',
-                payload: { account_id: account.account_id, user_id: account.user_id, currency: account.currency, phone_number: userPhone }
-            });
+            // Note: user details are fetched from auth-service via API if needed
+            // Core banking can function independently even if auth-service is down
+            try {
+                publishEvent('account-events', {
+                    type: 'AccountCreated',
+                    payload: { account_id: account.account_id, user_id: account.user_id, currency: account.currency }
+                });
+            } catch (eventError) {
+                // Don't fail account creation if event publishing fails
+                console.error('[AccountService] Failed to publish event (non-critical):', eventError.message);
+            }
 
             return { ...account, balance: '0.00' };
         } catch (e) {
-            await client.query('ROLLBACK');
+            console.error('[AccountService] Error in createAccount:', e);
+            console.error('[AccountService] Error message:', e.message);
+            console.error('[AccountService] Error stack:', e.stack);
+            if (client) {
+                try {
+                    await client.query('ROLLBACK');
+                } catch (rollbackError) {
+                    console.error('[AccountService] Error during rollback:', rollbackError.message);
+                }
+            }
             throw e;
         } finally {
-            client.release();
+            if (client) {
+                client.release();
+            }
         }
     }
 
