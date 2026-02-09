@@ -19,10 +19,10 @@ class PaymentMethodService {
 
         // If this is set as default, unset others
         if (is_default) {
-            await db.query('UPDATE payment_methods SET is_default = false WHERE user_id = $1', [userId]);
+            await db.queryWrite('UPDATE payment_methods SET is_default = false WHERE user_id = $1', [userId]);
         }
 
-        const result = await db.query(
+        const result = await db.queryWrite(
             'INSERT INTO payment_methods (method_id, user_id, type, details, is_default, created_at) VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING method_id, type, details, is_default, created_at',
             [methodId, userId, type, details, is_default || false]
         );
@@ -42,23 +42,26 @@ class PaymentMethodService {
     }
 
     async setDefault(userId, methodId) {
-        await db.query('BEGIN');
+        const client = await db.getWriteClient();
         try {
-            await db.query('UPDATE payment_methods SET is_default = false WHERE user_id = $1', [userId]);
-            const result = await db.query(
+            await client.query('BEGIN');
+            await client.query('UPDATE payment_methods SET is_default = false WHERE user_id = $1', [userId]);
+            const result = await client.query(
                 'UPDATE payment_methods SET is_default = true WHERE user_id = $1 AND method_id = $2 RETURNING method_id, is_default',
                 [userId, methodId]
             );
-            await db.query('COMMIT');
+            await client.query('COMMIT');
             return result.rows[0];
         } catch (e) {
-            await db.query('ROLLBACK');
+            await client.query('ROLLBACK');
             throw e;
+        } finally {
+            client.release();
         }
     }
 
     async deleteMethod(userId, methodId) {
-        const result = await db.query(
+        const result = await db.queryWrite(
             'DELETE FROM payment_methods WHERE user_id = $1 AND method_id = $2 RETURNING method_id',
             [userId, methodId]
         );

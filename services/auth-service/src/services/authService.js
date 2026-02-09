@@ -14,7 +14,7 @@ class AuthService {
         const hashedPassword = await bcrypt.hash(password, 10);
         const userId = `user-${uuidv4()}`;
 
-        const newUser = await db.query(
+        const newUser = await db.queryWrite(
             'INSERT INTO users (user_id, username, email, password_hash, phone_number) VALUES ($1, $2, $3, $4, $5) RETURNING user_id, username, email, role, phone_number',
             [userId, username, email, hashedPassword, phone_number]
         );

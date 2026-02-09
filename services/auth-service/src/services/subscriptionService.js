@@ -14,7 +14,7 @@ class SubscriptionService {
         const { channels, event_types, amount, currency, frequency, provider_id, next_payment_date } = data;
         const subscriptionId = uuidv4();
 
-        const result = await db.query(
+        const result = await db.queryWrite(
             `INSERT INTO subscriptions 
             (subscription_id, user_id, channels, event_types, amount, currency, frequency, provider_id, next_payment_date, created_at) 
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW()) 
@@ -25,7 +25,7 @@ class SubscriptionService {
     }
 
     async deleteSubscription(userId, subscriptionId) {
-        const result = await db.query(
+        const result = await db.queryWrite(
             'DELETE FROM subscriptions WHERE user_id = $1 AND subscription_id = $2 RETURNING subscription_id',
             [userId, subscriptionId]
         );
