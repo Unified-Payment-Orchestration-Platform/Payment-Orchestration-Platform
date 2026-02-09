@@ -41,30 +41,15 @@ class TransactionService {
             await client.query('COMMIT');
 
             // 5. Publish Event
-            // Fetch Sender and Receiver Phone Numbers AND Usernames
-            const senderRes = await client.query(
-                `SELECT u.phone_number, u.email, u.username FROM accounts a 
-                 JOIN users u ON a.user_id = u.user_id 
-                 WHERE a.account_id = $1`,
-                [from_account_id]
-            );
-            const receiverRes = await client.query(
-                `SELECT u.phone_number, u.email, u.username FROM accounts a 
-                 JOIN users u ON a.user_id = u.user_id 
-                 WHERE a.account_id = $1`,
-                [to_account_id]
-            );
-
+            // Note: User details (phone, email, username) should be fetched from auth-service via API
+            // Core banking can function independently even if auth-service/auth-db is down
             publishEvent('transaction-events', {
                 type: 'TransactionCompleted',
                 payload: {
                     ...transaction,
-                    sender_phone: senderRes.rows[0]?.phone_number,
-                    sender_email: senderRes.rows[0]?.email,
-                    sender_name: senderRes.rows[0]?.username,
-                    receiver_phone: receiverRes.rows[0]?.phone_number,
-                    receiver_email: receiverRes.rows[0]?.email,
-                    receiver_name: receiverRes.rows[0]?.username
+                    from_account_id,
+                    to_account_id
+                    // User details can be enriched by notification-service via auth-service API
                 }
             });
 
@@ -100,19 +85,13 @@ class TransactionService {
 
             await client.query('COMMIT');
 
-            // Fetch User Phone and Name (Enrichment)
-            const userRes = await client.query(
-                `SELECT u.phone_number, u.username FROM accounts a 
-                 JOIN users u ON a.user_id = u.user_id 
-                 WHERE a.account_id = $1`,
-                [account_id]
-            );
-            const userPhone = userRes.rows[0]?.phone_number;
-            const userName = userRes.rows[0]?.username;
-
+            // Publish Event
+            // Note: User details should be fetched from auth-service via API if needed
+            // Core banking can function independently even if auth-service/auth-db is down
             publishEvent('transaction-events', {
                 type: 'TransactionCompleted',
-                payload: { ...txRes.rows[0], phone_number: userPhone, account_name: userName }
+                payload: { ...txRes.rows[0], account_id }
+                // User details can be enriched by notification-service via auth-service API
             });
 
             return txRes.rows[0];
@@ -151,19 +130,13 @@ class TransactionService {
 
             await client.query('COMMIT');
 
-            // Fetch User Phone and Name (Enrichment)
-            const userRes = await client.query(
-                `SELECT u.phone_number, u.username FROM accounts a 
-                 JOIN users u ON a.user_id = u.user_id 
-                 WHERE a.account_id = $1`,
-                [account_id]
-            );
-            const userPhone = userRes.rows[0]?.phone_number;
-            const userName = userRes.rows[0]?.username;
-
+            // Publish Event
+            // Note: User details should be fetched from auth-service via API if needed
+            // Core banking can function independently even if auth-service/auth-db is down
             publishEvent('transaction-events', {
                 type: 'TransactionCompleted',
-                payload: { ...txRes.rows[0], phone_number: userPhone, account_name: userName }
+                payload: { ...txRes.rows[0], account_id }
+                // User details can be enriched by notification-service via auth-service API
             });
 
             return txRes.rows[0];
