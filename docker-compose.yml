@@ -1,4 +1,7 @@
+<<<<<<< Updated upstream
 
+=======
+>>>>>>> Stashed changes
 services:
   api-gateway-service:
     build:
@@ -9,16 +12,17 @@ services:
     #   - "3000-3001:3000" # Removed to allow scaling without host port conflicts. Nginx handles LB.
     environment:
       - NODE_ENV=development
-      - DB_HOST=db
+      - DB_HOST=db-auth-primary
       - DB_PORT=5432
       - DB_USER=${POSTGRES_USER}
       - DB_PASSWORD=${POSTGRES_PASSWORD}
-      - DB_NAME=${POSTGRES_DB}
+      - DB_NAME=auth_db
+      - DB_REPLICA_HOST=db-auth-replica
       - KAFKA_BROKER=${KAFKA_BROKER} # For later Pub/Sub integration
 
     depends_on:
-      db:
-        condition: service_started
+      db-auth-primary:
+        condition: service_healthy
       kafka:
         condition: service_healthy
     networks:
@@ -27,25 +31,30 @@ services:
   core-banking-service:
     build:
       context: ./services/core-banking-service/
+    container_name: core-banking-service
     ports:
       - "3005:3005"
     environment:
       - NODE_ENV=development
       - PORT=3005
-      - DB_HOST=db
+      - DB_HOST=db-core-banking-primary
       - DB_PORT=5432
       - DB_USER=${POSTGRES_USER}
       - DB_PASSWORD=${POSTGRES_PASSWORD}
-      - DB_NAME=${POSTGRES_DB}
-      - DB_REPLICA_HOST=db-replica
+      - DB_NAME=core_banking_db
+      - DB_REPLICA_HOST=db-core-banking-replica
       - KAFKA_BROKER=${KAFKA_BROKER}
     depends_on:
-      db:
+      db-core-banking-primary:
+        condition: service_healthy
+      db-core-banking-replica:
         condition: service_started
       kafka:
         condition: service_healthy
     networks:
-      - app-network
+      app-network:
+        aliases:
+          - core-banking-service
 
   compliance-service:
     build:
@@ -67,15 +76,18 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3001
-      - DB_HOST=db
+      - DB_HOST=db-auth-primary
       - DB_PORT=5432
       - DB_USER=${POSTGRES_USER}
       - DB_PASSWORD=${POSTGRES_PASSWORD}
-      - DB_NAME=${POSTGRES_DB}
+      - DB_NAME=auth_db
+      - DB_REPLICA_HOST=db-auth-replica
       - JWT_SECRET=${JWT_SECRET}
       - KAFKA_BROKER=${KAFKA_BROKER}
     depends_on:
-      db:
+      db-auth-primary:
+        condition: service_healthy
+      db-auth-replica:
         condition: service_started
       kafka:
         condition: service_healthy
@@ -114,27 +126,141 @@ services:
     networks:
       - app-network
 
-  db:
-    image: postgres:16-alpine # Lightweight PostgreSQL image
+  # Auth Service - Primary PostgreSQL database (for writes)
+  db-auth-primary:
+    image: postgres:16-alpine
+    container_name: db-auth-primary
     ports:
       - "5432:5432" # Expose for local tools like pgAdmin
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_DB=auth_db
+      - POSTGRES_REPLICATION_USER=${POSTGRES_REPLICATION_USER:-replicator}
+      - POSTGRES_REPLICATION_PASSWORD=${POSTGRES_REPLICATION_PASSWORD:-replicator_password}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - max_wal_senders=10
+      - -c
+      - max_replication_slots=10
+      - -c
+      - hot_standby=on
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_command='/bin/sh -c "mkdir -p /var/lib/postgresql/archive && test ! -f /var/lib/postgresql/archive/%f && cp %p /var/lib/postgresql/archive/%f"'
+      - -c
+      - listen_addresses=*
     volumes:
-      - db-data:/var/lib/postgresql/data # Persist data across restarts
-      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql # Init DB script
+      - db-auth-primary-data:/var/lib/postgresql/data
+      - ./database/init-auth-db.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./database/setup-replication.sh:/docker-entrypoint-initdb.d/99-setup-replication.sh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d auth_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     networks:
       - app-network
-  db-replica:
+
+  # Auth Service - Replica PostgreSQL database (for reads)
+  db-auth-replica:
     image: postgres:16-alpine
+    container_name: db-auth-replica
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_DB=auth_db
+      - POSTGRES_REPLICATION_USER=${POSTGRES_REPLICATION_USER:-replicator}
+      - POSTGRES_REPLICATION_PASSWORD=${POSTGRES_REPLICATION_PASSWORD:-replicator_password}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+      - POSTGRES_MASTER_SERVICE=db-auth-primary
+    entrypoint: ["/bin/sh", "/database/setup-replica.sh"]
+    volumes:
+      - db-auth-replica-data:/var/lib/postgresql/data
+      - ./database/setup-replica.sh:/database/setup-replica.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d auth_db && psql -U ${POSTGRES_USER} -d auth_db -c 'SELECT pg_is_in_recovery();' | grep -q 't'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     depends_on:
-      - db
+      db-auth-primary:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  # Core Banking Service - Primary PostgreSQL database (for writes)
+  db-core-banking-primary:
+    image: postgres:16-alpine
+    container_name: db-core-banking-primary
+    ports:
+      - "5433:5432" # Different port to avoid conflict
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=core_banking_db
+      - POSTGRES_REPLICATION_USER=${POSTGRES_REPLICATION_USER:-replicator}
+      - POSTGRES_REPLICATION_PASSWORD=${POSTGRES_REPLICATION_PASSWORD:-replicator_password}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - max_wal_senders=10
+      - -c
+      - max_replication_slots=10
+      - -c
+      - hot_standby=on
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_command='/bin/sh -c "mkdir -p /var/lib/postgresql/archive && test ! -f /var/lib/postgresql/archive/%f && cp %p /var/lib/postgresql/archive/%f"'
+      - -c
+      - listen_addresses=*
+    volumes:
+      - db-core-banking-primary-data:/var/lib/postgresql/data
+      - ./database/init-core-banking-db.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./database/setup-replication.sh:/docker-entrypoint-initdb.d/99-setup-replication.sh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d core_banking_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  # Core Banking Service - Replica PostgreSQL database (for reads)
+  db-core-banking-replica:
+    image: postgres:16-alpine
+    container_name: db-core-banking-replica
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=core_banking_db
+      - POSTGRES_REPLICATION_USER=${POSTGRES_REPLICATION_USER:-replicator}
+      - POSTGRES_REPLICATION_PASSWORD=${POSTGRES_REPLICATION_PASSWORD:-replicator_password}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+      - POSTGRES_MASTER_SERVICE=db-core-banking-primary
+    entrypoint: ["/bin/sh", "/database/setup-replica.sh"]
+    volumes:
+      - db-core-banking-replica-data:/var/lib/postgresql/data
+      - ./database/setup-replica.sh:/database/setup-replica.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d core_banking_db && psql -U ${POSTGRES_USER} -d core_banking_db -c 'SELECT pg_is_in_recovery();' | grep -q 't'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    depends_on:
+      db-core-banking-primary:
+        condition: service_healthy
     networks:
       - app-network
 
@@ -212,4 +338,7 @@ networks:
     driver: bridge
 
 volumes:
-  db-data:
+  db-auth-primary-data:
+  db-auth-replica-data:
+  db-core-banking-primary-data:
+  db-core-banking-replica-data:
